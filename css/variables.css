@@ -1,0 +1,203 @@
+:root {
+  color-scheme: light;
+
+  /* ---------- Color: neutral foundation ---------- */
+  --color-background: #ffffff; /* the page */
+  --color-surface: #f8f8f8; /* cards and panels */
+  --color-surface-sunken: #efefef; /* hover / pressed on cards */
+  --color-elevated: #ffffff; /* modals and menus, above the page */
+  --color-field: #ffffff; /* inputs and choice tiles */
+  --color-text: #333333;
+  --color-text-muted: #6b6b6b;
+  --color-text-subtle: #8a8a8a;
+  --color-border: #e8e8e8;
+  --color-border-strong: #d3d3d3;
+  --color-inverse: #333333;
+  --color-inverse-hover: #1f1f1f;
+  --color-on-inverse: #ffffff;
+  --color-on-inverse-success: #9fd3b4; /* check icons on dark buttons/toasts */
+  --color-backdrop: rgba(28, 28, 28, 0.36);
+
+  /* ---------- Color: states (muted on purpose) ---------- */
+  --color-success: #3d7a5a;
+  --color-success-soft: #e6f0ea;
+  --color-warning: #9a6519;
+  --color-warning-soft: #f7eedd;
+  --color-danger: #b0463a;
+  --color-danger-hover: #973a30;
+  --color-danger-soft: #f7ebe9;
+  --color-on-danger: #ffffff;
+
+  /* ---------- Color: streak (the one warm highlight in the UI) ---------- */
+  --color-streak: #c4762d;
+  --color-streak-strong: #9a5a1f;
+  --color-streak-soft: #fbf3e9;
+  --color-streak-line: #f0dcc4;
+
+  /* ---------- Color: knowledge journey bar ---------- */
+  --color-journey-learning: #d9d9d9;
+  --color-journey-strengthening: #8f8f8f;
+  --color-journey-rooted: #333333;
+
+  /* Project tints are mixed toward this color for readable text */
+  --accent-text-mix: #000000;
+
+  /* ---------- Typography ---------- */
+  --font-sans: "IBM Plex Sans Arabic", system-ui, -apple-system, "Segoe UI", Tahoma, sans-serif;
+  --font-serif: "Noto Naskh Arabic", "Amiri", "Geeza Pro", "Times New Roman", serif;
+
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-md: 1.125rem;
+  --text-lg: 1.375rem;
+  --text-xl: 1.625rem;
+  --text-2xl: 2.125rem;
+  --text-3xl: 2.75rem;
+
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+
+  --leading-tight: 1.35;
+  --leading-normal: 1.7;
+  --leading-relaxed: 1.9;
+
+  /* ---------- Spacing (4px scale) ---------- */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+  --space-20: 5rem;
+
+  /* ---------- Shape ---------- */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-pill: 999px;
+
+  /* ---------- Elevation (used sparingly) ---------- */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.08);
+  --shadow-modal: 0 24px 64px rgba(0, 0, 0, 0.16);
+
+  /* ---------- Motion ---------- */
+  --ease-out: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --duration-fast: 120ms;
+  --duration-base: 200ms;
+  --duration-slow: 320ms;
+
+  /* ---------- Layout ---------- */
+  --header-height: 64px;
+  --content-max: 1040px;
+  --medium-max: 820px;
+  --reading-max: 680px;
+  --touch-target: 44px;
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+
+  /* ---------- Layers ---------- */
+  --z-nav: 20;
+  --z-toast: 60;
+}
+
+/*
+ * Dark theme. Built on the same two brand colors, inverted: #333333 becomes
+ * the card color and #F8F8F8 the text. It follows the system setting unless
+ * the user picks a theme with the header toggle (html[data-theme]).
+ * The token list appears twice because CSS cannot share a block between a
+ * media query and an attribute selector.
+ */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --color-background: #262626;
+    --color-surface: #333333;
+    --color-surface-sunken: #3d3d3d;
+    --color-elevated: #2e2e2e;
+    --color-field: #262626;
+    --color-text: #f8f8f8;
+    --color-text-muted: #b5b5b5;
+    --color-text-subtle: #8f8f8f;
+    --color-border: #3b3b3b;
+    --color-border-strong: #525252;
+    --color-inverse: #f8f8f8;
+    --color-inverse-hover: #ffffff;
+    --color-on-inverse: #262626;
+    --color-on-inverse-success: #3d7a5a;
+    --color-backdrop: rgba(0, 0, 0, 0.6);
+    --color-success: #79bd97;
+    --color-success-soft: #2a3a31;
+    --color-warning: #dcaa5e;
+    --color-warning-soft: #3d3222;
+    --color-danger: #e5857a;
+    --color-danger-hover: #ee998f;
+    --color-danger-soft: #422a27;
+    --color-on-danger: #262626;
+    --color-streak: #e39a55;
+    --color-streak-strong: #f2bd8a;
+    --color-streak-soft: #3a2f24;
+    --color-streak-line: #54412d;
+    --color-journey-learning: #4d4d4d;
+    --color-journey-strengthening: #8a8a8a;
+    --color-journey-rooted: #f8f8f8;
+    --accent-text-mix: #ffffff;
+    --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.35);
+    --shadow-modal: 0 24px 64px rgba(0, 0, 0, 0.55);
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --color-background: #262626;
+  --color-surface: #333333;
+  --color-surface-sunken: #3d3d3d;
+  --color-elevated: #2e2e2e;
+  --color-field: #262626;
+  --color-text: #f8f8f8;
+  --color-text-muted: #b5b5b5;
+  --color-text-subtle: #8f8f8f;
+  --color-border: #3b3b3b;
+  --color-border-strong: #525252;
+  --color-inverse: #f8f8f8;
+  --color-inverse-hover: #ffffff;
+  --color-on-inverse: #262626;
+  --color-on-inverse-success: #3d7a5a;
+  --color-backdrop: rgba(0, 0, 0, 0.6);
+  --color-success: #79bd97;
+  --color-success-soft: #2a3a31;
+  --color-warning: #dcaa5e;
+  --color-warning-soft: #3d3222;
+  --color-danger: #e5857a;
+  --color-danger-hover: #ee998f;
+  --color-danger-soft: #422a27;
+  --color-on-danger: #262626;
+  --color-streak: #e39a55;
+  --color-streak-strong: #f2bd8a;
+  --color-streak-soft: #3a2f24;
+  --color-streak-line: #54412d;
+  --color-journey-learning: #4d4d4d;
+  --color-journey-strengthening: #8a8a8a;
+  --color-journey-rooted: #f8f8f8;
+  --accent-text-mix: #ffffff;
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.35);
+  --shadow-modal: 0 24px 64px rgba(0, 0, 0, 0.55);
+}
+
+/*
+ * Project accent scope. Any element carrying [data-accent] sets --accent inline
+ * (from its project type); derived tints are computed here so they resolve
+ * against that element's own accent.
+ */
+[data-accent] {
+  --accent-soft: color-mix(in srgb, var(--accent) 10%, var(--color-surface));
+  --accent-line: color-mix(in srgb, var(--accent) 40%, var(--color-surface));
+  --accent-strong: color-mix(in srgb, var(--accent) 72%, var(--accent-text-mix));
+}

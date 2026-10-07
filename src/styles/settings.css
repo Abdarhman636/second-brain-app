@@ -1,0 +1,312 @@
+/* ==========================================================================
+   Settings: rows in a bordered grid — the section on one side, controls on
+   the other.
+   ========================================================================== */
+
+.settings {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: var(--color-border);
+  border: 1px solid var(--color-border);
+}
+
+.settings-section {
+  display: grid;
+  grid-template-columns: minmax(0, 15rem) minmax(0, 1fr);
+  gap: var(--space-6);
+  padding: var(--space-6);
+  background: var(--color-surface);
+}
+
+.settings-section__title {
+  font-family: var(--font-display);
+  font-size: var(--text-md);
+  font-weight: var(--weight-bold);
+}
+
+.settings-section__description {
+  margin-top: var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.settings-section__body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.settings-hint {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--color-text-subtle);
+}
+
+/* ---------- Account ---------- */
+
+.settings-account {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.settings-account__avatar {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  font-weight: var(--weight-bold);
+  color: var(--color-on-inverse);
+  background: var(--color-inverse);
+}
+
+.settings-account__name {
+  font-weight: var(--weight-semibold);
+}
+
+.settings-account__email {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.settings-inline-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: 100%;
+  max-width: 28rem;
+}
+
+.settings-inline-form__row {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.settings-inline-form__row .btn {
+  flex: none;
+}
+
+/* ---------- Appearance ---------- */
+
+.theme-choices {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 12rem));
+  gap: var(--space-3);
+}
+
+.theme-choice {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  cursor: pointer;
+  background: var(--color-field);
+  border: 1px solid var(--color-border-strong);
+  transition: border-color var(--duration-fast);
+}
+
+.theme-choice:hover {
+  border-color: var(--color-text);
+}
+
+.theme-choice:has(.theme-choice__input:checked) {
+  border-color: var(--color-text);
+  box-shadow: inset 0 0 0 1px var(--color-text);
+}
+
+.theme-choice:has(.theme-choice__input:focus-visible) {
+  outline: 2px solid var(--color-text);
+  outline-offset: 2px;
+}
+
+.theme-choice__input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* A tiny drawing of the app in each theme */
+.theme-choice__preview {
+  display: grid;
+  grid-template-columns: 28% 1fr 1fr;
+  gap: 4px;
+  height: 72px;
+  padding: 8px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.theme-choice--light .theme-choice__preview {
+  background: #e6e6e4;
+}
+
+.theme-choice--dark .theme-choice__preview {
+  background: #0f0f0f;
+}
+
+.theme-choice__sidebar,
+.theme-choice__cell {
+  display: block;
+}
+
+.theme-choice--light .theme-choice__sidebar,
+.theme-choice--light .theme-choice__cell {
+  background: #f3f3f1;
+  border: 1px solid #cfcfcc;
+}
+
+.theme-choice--dark .theme-choice__sidebar,
+.theme-choice--dark .theme-choice__cell {
+  background: #181818;
+  border: 1px solid #2c2c2b;
+}
+
+.theme-choice__cell--accent {
+  background: linear-gradient(to top, #f27b35 34%, transparent 34%) !important;
+}
+
+.theme-choice__text {
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-3);
+}
+
+.theme-choice__label {
+  font-weight: var(--weight-semibold);
+}
+
+.theme-choice__description {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+/* ---------- Vacation ---------- */
+
+.settings-status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.settings-status__dot {
+  width: 10px;
+  height: 10px;
+  background: var(--color-border-strong);
+}
+
+.settings-status__dot.is-on {
+  background: var(--color-brand);
+}
+
+/* ---------- Shortcuts ---------- */
+
+.shortcut-list {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.shortcut-list__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding-block: var(--space-2);
+  font-size: var(--text-sm);
+  border-top: 1px dashed var(--color-border);
+}
+
+.shortcut-list__item:first-child {
+  border-top: 0;
+}
+
+.shortcut-list__item dt {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-text-subtle);
+}
+
+.shortcut-list__item dd {
+  color: var(--color-text-muted);
+}
+
+@media (max-width: 760px) {
+  .settings-section {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-4);
+    padding: var(--space-5);
+  }
+
+  .theme-choices {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+}
+
+/* ---------- Daily limit ---------- */
+
+.limit-choices {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  width: 100%;
+  max-width: 34rem;
+  border-top: 1px solid var(--color-border-strong);
+  border-inline-start: 1px solid var(--color-border-strong);
+}
+
+.limit-choice {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: var(--space-3) var(--space-2);
+  cursor: pointer;
+  background: var(--color-field);
+  border-inline-end: 1px solid var(--color-border-strong);
+  border-bottom: 1px solid var(--color-border-strong);
+  transition: background-color var(--duration-fast);
+}
+
+.limit-choice:hover {
+  background: var(--color-surface-sunken);
+}
+
+.limit-choice:has(.limit-choice__input:checked) {
+  color: var(--color-on-brand);
+  background: var(--color-brand);
+}
+
+.limit-choice:has(.limit-choice__input:focus-visible) {
+  outline: 2px solid var(--color-text);
+  outline-offset: -4px;
+}
+
+.limit-choice__input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.limit-choice__value {
+  font-family: var(--font-mono);
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+}
+
+.limit-choice__note {
+  font-size: var(--text-2xs);
+  opacity: 0.75;
+}
+
+@media (max-width: 520px) {
+  .limit-choices {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}

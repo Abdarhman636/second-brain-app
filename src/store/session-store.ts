@@ -14,11 +14,16 @@ export type SessionPhase =
 interface SessionStore {
   phase: SessionPhase;
   error: string | null;
+  /** Signed in through a password-reset link: the user still has to choose a new password. */
+  passwordRecovery: boolean;
   setPhase: (phase: SessionPhase, error?: string | null) => void;
+  setPasswordRecovery: (value: boolean) => void;
 }
 
 export const useSessionStore = create<SessionStore>()((set) => ({
   phase: 'starting',
   error: null,
+  passwordRecovery: false,
   setPhase: (phase, error = null) => set({ phase, error }),
+  setPasswordRecovery: (passwordRecovery) => set({ passwordRecovery }),
 }));

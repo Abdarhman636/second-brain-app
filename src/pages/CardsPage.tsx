@@ -3,6 +3,8 @@
  * in batches as you scroll, so long collections stay fast.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router';
+import { Icon } from '../components/Icon';
 import { KnowledgeCard } from '../components/KnowledgeCard';
 import { EmptyState } from '../components/ui';
 import { CARD_TYPE_ORDER, getCardType } from '../domain/card-types';
@@ -10,7 +12,7 @@ import { filterCards, type CardFilter } from '../domain/card-search';
 import { formatCount } from '../domain/format';
 import { compareByReviewDate, isCardDue } from '../domain/review-scheduler';
 import type { CardType } from '../domain/types';
-import { useActiveCards, useDueCards, useProjectMap } from '../hooks/use-app-data';
+import { useActiveCards, useDueCards, useProjectMap, useTodaysReviews } from '../hooks/use-app-data';
 import { useDocumentTitle } from '../hooks/use-document-title';
 import { useToday } from '../hooks/use-today';
 import { useAppStore } from '../store/app-store';
@@ -27,6 +29,7 @@ export function CardsPage() {
   const projects = useAppStore((state) => state.projects);
   const activeCards = useActiveCards();
   const dueCount = useDueCards(today).length;
+  const todaysCount = useTodaysReviews(today).cards.length;
   const projectMap = useProjectMap();
   const openDialog = useUiStore((state) => state.openDialog);
 
@@ -91,6 +94,25 @@ export function CardsPage() {
             {formatCount(activeCards.length, 'cards')} في {formatCount(activeProjects.length, 'projectsGenitive')}
             {dueCount > 0 && ` · ${dueCount} للمراجعة اليوم`}
           </p>
+        </div>
+        <div className="page-header__actions">
+          {/* With a project chosen in the filter, review that project; otherwise today's review. */}
+          {filter.projectId ? (
+            <Link className="btn btn--primary" to={`/projects/${filter.projectId}/review`}>
+              <Icon name="review" size={18} />
+              راجع بطاقات المشروع
+            </Link>
+          ) : todaysCount > 0 ? (
+            <Link className="btn btn--primary" to="/review">
+              <Icon name="review" size={18} />
+              ابدأ المراجعة · {formatCount(todaysCount, 'cards')}
+            </Link>
+          ) : (
+            <button type="button" className="btn btn--secondary" disabled>
+              <Icon name="check" size={18} />
+              لا مراجعات متبقية اليوم
+            </button>
+          )}
         </div>
       </header>
 

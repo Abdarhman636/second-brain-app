@@ -3,7 +3,7 @@ import { DEFAULT_DAILY_LIMIT } from '../domain/review-scheduler';
 import type { Card, CardBody, ISODate, Project, ReviewLogEntry, ReviewResult, Shelf, User, UserData } from '../domain/types';
 
 /** The user shown in demo mode ("جرّب بدون حساب"), which loads the mock data below. */
-export const DEMO_USER: User = Object.freeze({ id: 'user-demo', name: 'نور', email: '', dailyLimit: DEFAULT_DAILY_LIMIT });
+export const DEMO_USER: User = Object.freeze({ id: 'user-demo', name: 'نور', email: '', dailyLimit: DEFAULT_DAILY_LIMIT, isStudent: null, plan: 'free', planExpiresAt: null, isAdmin: false });
 
 /** A small diagram for the demo image card, inlined so it needs no file or network. */
 const FORGETTING_CURVE_IMAGE = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(`

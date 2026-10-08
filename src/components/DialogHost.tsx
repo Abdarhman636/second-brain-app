@@ -12,7 +12,9 @@ import { SHELF_NAME_MAX_LENGTH } from '../domain/shelves';
 import type { Project, ProjectInput } from '../domain/types';
 import { useToday } from '../hooks/use-today';
 import { useAppStore } from '../store/app-store';
+import { isPlanLimitReached } from '../store/selectors';
 import { useUiStore, type Dialog } from '../store/ui-store';
+import { AiCardsDialog } from './AiCardsDialog';
 import { CardForm } from './CardForm';
 import { Icon } from './Icon';
 import { Modal } from './Modal';
@@ -52,6 +54,17 @@ function CreateCardDialog({ dialog }: { dialog: DialogOf<'create-card'> }) {
 
   return (
     <Modal title="بطاقة جديدة" onClose={closeDialog}>
+      <button
+        type="button"
+        className="ai-entry"
+        onClick={() => openDialog({ kind: 'ai-cards', ...(preferred ? { projectId: preferred } : {}) })}
+      >
+        <Icon name="sparkle" size={16} />
+        <span>
+          <strong>أنشئ بطاقات بالذكاء الاصطناعي</strong> من نص أو صورة
+        </span>
+        <Icon name="arrowLeft" size={16} />
+      </button>
       <CardForm
         initial={{ projectId: preferred ?? '', type: DEFAULT_CARD_TYPE, values: {} }}
         projects={projects}
@@ -153,6 +166,7 @@ function CreateProjectDialog({ dialog }: { dialog: DialogOf<'create-project'> })
   const navigate = useNavigate();
   const projects = useAppStore((state) => state.projects);
   const shelves = useAppStore((state) => state.shelves);
+  const canAddShelf = useAppStore((state) => !isPlanLimitReached(state, 'shelves'));
   const addProject = useAppStore((state) => state.addProject);
   const { closeDialog, openDialog, showToast } = useUiStore.getState();
   const shelfId = dialog.shelfId && shelves.some((shelf) => shelf.id === dialog.shelfId) ? dialog.shelfId : null;
@@ -162,6 +176,7 @@ function CreateProjectDialog({ dialog }: { dialog: DialogOf<'create-project'> })
       <ProjectForm
         initial={{ name: '', type: DEFAULT_PROJECT_TYPE, customTypeLabel: null, color: suggestProjectColor(projects), shelfId }}
         shelves={shelves}
+        canAddShelf={canAddShelf}
         submitLabel="إنشاء المشروع"
         {...(dialog.lead ? { lead: dialog.lead } : {})}
         onCancel={closeDialog}
@@ -183,6 +198,7 @@ function CreateProjectDialog({ dialog }: { dialog: DialogOf<'create-project'> })
 function EditProjectDialog({ dialog }: { dialog: DialogOf<'edit-project'> }) {
   const project = useAppStore((state) => state.projects.find((item) => item.id === dialog.projectId));
   const shelves = useAppStore((state) => state.shelves);
+  const canAddShelf = useAppStore((state) => !isPlanLimitReached(state, 'shelves'));
   const updateProject = useAppStore((state) => state.updateProject);
   const { closeDialog, showToast } = useUiStore.getState();
   if (!project) return null;
@@ -192,6 +208,7 @@ function EditProjectDialog({ dialog }: { dialog: DialogOf<'edit-project'> }) {
       <ProjectForm
         initial={project}
         shelves={shelves}
+        canAddShelf={canAddShelf}
         submitLabel="حفظ التغييرات"
         onCancel={closeDialog}
         onSubmit={(input, newShelfName) => {
@@ -312,6 +329,8 @@ export function DialogHost() {
       return <CreateProjectDialog key="create-project" dialog={dialog} />;
     case 'edit-project':
       return <EditProjectDialog key="edit-project" dialog={dialog} />;
+    case 'ai-cards':
+      return <AiCardsDialog key="ai-cards" {...(dialog.projectId ? { projectId: dialog.projectId } : {})} />;
     case 'create-shelf':
     case 'rename-shelf':
       return <ShelfDialog key={dialog.kind} dialog={dialog} />;

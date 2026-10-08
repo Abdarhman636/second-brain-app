@@ -114,7 +114,7 @@ function ShelfGroup({ shelf, items }: { shelf: Shelf | null; items: Item[] }) {
         <h2 className="shelf-group__title" id={headingId}>
           <Link to={`/projects?shelf=${shelf?.id ?? NO_SHELF}`}>
             <Icon name="shelf" size={18} />
-            {shelf?.name ?? 'بدون رف'}
+            {shelf ? `رف ${shelf.name}` : 'بدون رف'}
           </Link>
         </h2>
         <span className="shelf-group__count">{formatCount(items.length, 'projects')}</span>
@@ -188,7 +188,7 @@ export function ProjectsPage() {
     <div className="page">
       <header className="page-header">
         <div>
-          <h1 className="page-title">المشاريع</h1>
+          <h1 className="page-title">الرفوف والمشاريع</h1>
           <p className="page-subtitle">
             {formatCount(shelves.length, 'shelves')} · {formatCount(active.length, 'projects')} · {formatCount(activeCards.length, 'cards')}
           </p>

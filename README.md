@@ -32,7 +32,7 @@ Then open <http://localhost:5173>.
 
 1. Copy `.env.example` to `.env.local`, then fill in the project URL and publishable key from Supabase → Project Settings → API. `.env.local` is never committed.
 2. In Supabase, open **SQL Editor**, paste the contents of [`supabase/schema.sql`](supabase/schema.sql), and run it. This creates the tables, the Row Level Security policies, and the private `card-images` bucket. Running it again is safe, and it's how an existing database picks up new tables (e.g. shelves): **run it again after pulling a version that changes it**.
-3. In **Authentication → URL Configuration**, set the Site URL to where the app runs (e.g. `http://localhost:5173`), so email confirmation links lead back to the app.
+3. In **Authentication → URL Configuration**, set the Site URL to where the app runs (e.g. `http://localhost:5173`), so email links lead back to the app. Also add `http://localhost:5173/**` under **Redirect URLs** so password-reset links open `/reset-password` directly. Without it they land on the home page, and the app still forwards the user to choose a new password.
 4. Restart `npm run dev`. Vite only reads `.env.local` at startup.
 
 Without `.env.local`, the app still runs, but only in demo mode.
@@ -45,6 +45,8 @@ The UI fonts (IBM Plex Sans Arabic, plus Noto Naskh Arabic for quotes) come from
 
 - **Accounts** (Supabase Auth): email and password sign-in and sign-up.
   - After signing up, confirm your email (you can request a new confirmation email). The confirmation link signs you in.
+  - Sign-up also asks **هل أنت طالب؟** (saved on the account as `is_student`, and changeable in settings).
+  - **نسيت كلمة المرور؟** (on sign-in) emails a link that opens `/reset-password`, where the user chooses a new password and is signed in. The page says the same thing whether or not the address has an account. An expired link gets a clear message and a way to ask for a new one.
   - The session survives page reloads.
   - Signed-out visitors are sent to sign-in, then returned to the page they asked for.
   - **جرّب التطبيق بدون حساب** opens demo mode: sample data, and nothing is saved.
@@ -104,6 +106,63 @@ The UI fonts (IBM Plex Sans Arabic, plus Noto Naskh Arabic for quotes) come from
     - Choosing a shelf filters to it; the URL keeps the choice (`?shelf=…`).
   - Rename or delete a shelf from its **⋯** menu. Deleting a shelf keeps its projects, which end up on no shelf.
   - A project's page shows its shelf in the breadcrumb (المشاريع / كتب).
+- **Plans** (`/pricing`, open to everyone; prices in SAR; paid once for 6 or 12 months, with no automatic renewal):
+
+  | Plan | 6 months | 12 months | Students (6 / 12) | What's in it |
+  |---|---|---|---|---|
+  | **بذرة** (free) | 0 | 0 | 0 | 1 shelf, 2 projects, 20 cards, with every review feature |
+  | **جذور** | 49 SAR | 79 SAR | 29 / 49 SAR | Unlimited shelves, projects and cards |
+  | **راسخ** | 99 SAR | 149 SAR | 59 / 99 SAR | Everything in جذور, plus AI-made cards from text or a photo (up to 300 a month). Shown as "قريبًا" until the AI feature is built (`available: false` in `src/domain/plans.ts`) |
+
+  - **Founders' price**: the first 100 subscribers pay the launch prices and keep them on every renewal.
+    - Launch prices: جذور 29 / 49, or 19 / 35 for students. راسخ 59 / 99, or 39 / 69 for students.
+    - A seat is taken when the subscription is approved (the `founders` table).
+    - The pricing page shows the seats left.
+    - The database decides who gets the founder price.
+  - A free account that tries to add past a limit is sent to `/pricing?reason=…`.
+    - The check is in `openDialog` (ui-store).
+    - The database enforces the same limits with insert triggers.
+    - Archived projects count, and demo mode has no limits.
+  - The sidebar shows a free account's usage. For a paid plan, it shows a renewal reminder in the last 14 days.
+  - "قريبًا" note: instant payment by Apple Pay, mada and cards.
+- **Student discount** (about a third off): for accounts that answered **نعم، طالب** and use a **university email**.
+  - A university email has an academic domain: `….edu`, `….edu.sa`, `….ac.uk`… Every Saudi university uses `.edu.sa`.
+  - Merely "not Gmail" isn't enough, since anyone can buy a domain.
+  - Email confirmation proves the student owns the address.
+  - Sign-up asks the student question before the email. When the answer is yes, it asks for the university email and checks it live.
+  - Existing students can move their account to a university email from Settings (Supabase sends a confirmation link).
+  - The rule is in `src/domain/students.ts`. The database applies it too (`is_academic_email`) when pricing a request, so the discount can't be claimed by editing the request.
+- **Manual payment by bank transfer** (`/checkout`), in three steps:
+  1. Choose 6 or 12 months.
+  2. Transfer the exact amount to the IBAN, following step-by-step instructions with copy buttons.
+  3. Upload a screenshot of the receipt (or a PDF) and send.
+  - Each request gets a short reference (e.g. `RS-7KQ2M`) to put in the transfer note.
+  - The student can check the status or cancel while the request is pending. If a request is rejected, the student sees the reason.
+  - Payment details (IBAN, account holder name, WhatsApp) live in `PAYMENT` in `src/config.ts`. Until the IBAN is set, checkout says subscriptions open soon.
+- **AI cards** (راسخ plan, and admins for testing): paste text or pick a photo, choose up to 5, 10 or 15 cards, and get suggestions.
+  - Nothing is added until the student reviews and edits the suggestions, then keeps the ones they want.
+  - Open it from a project page (**بطاقات بالذكاء الاصطناعي**) or from the top of the new-card dialog.
+  - **How it works:** the `generate-cards` Supabase Edge Function (`supabase/functions/generate-cards/`) holds the Anthropic key, so the browser never sees it. It calls Claude Haiku 5.5 and gets the cards back as JSON that matches a fixed schema.
+  - **Limits, both in the database** (`app_settings`):
+    - per user: 300 cards a month;
+    - app-wide: 5,000 cards a month, about $1 with Haiku 5.5. Keep this below the spend limit in the Anthropic Console.
+  - **What's charged:** the function reserves the cards first (`reserve_ai_cards`), then charges only what came back (`settle_ai_cards`). A failed request is refunded.
+  - **Setup:**
+    1. Create an Anthropic API key, and set a monthly spend limit in the Console.
+    2. Add it as the `ANTHROPIC_API_KEY` secret in Supabase → Edge Functions → Secrets.
+    3. Run `npx supabase functions deploy generate-cards --project-ref <ref>`.
+    4. Run `supabase/schema.sql` again.
+- **Mobile app** (`/app`): the native apps launch once Rusookh reaches 100 users.
+  - A live counter (`public_user_count`) shows the number of confirmed accounts.
+  - Until launch, the page explains step by step how to add Rusookh to the home screen on iPhone (Safari) and Android (Chrome and Samsung Internet), with each button's English name too.
+  - On Android Chrome, it offers one-tap install.
+  - The site is installable: `public/manifest.webmanifest` and the icons in `public/icons/` make it open full screen with Rusookh's icon.
+- **Admin** (`/admin/payments`, only for admins): pending requests with the receipt, account email, amount, payer name and reference. Requests priced for students or founders are marked «سعر طالب» / «سعر مؤسس».
+  - **تفعيل** gives the plan for its period. If the plan is still running, the new period is added to its end.
+  - **رفض** asks for a reason, which the student sees.
+  - Approval and rejection run as database functions that check the caller is an admin.
+  - To make an account an admin, see the comment in `supabase/schema.sql`, then sign in again.
+- **Where plans live**: the `subscriptions` table (`plan`, `expires_at`). No row, or an expired one, means the free plan. Users can read their own row, but only admins can write. Prices, including the student price, are set by the database (`plan_price`), not by the app. Keep them in sync with `src/domain/plans.ts`.
 - **Settings** (`/settings`):
   - **Account**: change your name (saved to your account), see your email, and sign out.
   - **Appearance**: light or dark.
@@ -113,8 +172,12 @@ The UI fonts (IBM Plex Sans Arabic, plus Noto Naskh Arabic for quotes) come from
   - **Keyboard shortcuts**: the full list.
 - **Themes**: light by default, dark on request. The choice is saved on the device and applied before the first paint, so there's no flash.
 - **Footer links** (at the bottom of the sidebar, or under the About page when signed out; the sign-in pages have none):
-  - **ما هو رسوخ؟** leads to `/about`, which shows the same introduction as the sign-in page. Anyone can open it, signed in or not.
-  - **ادعيلي دعوة حلوة** links to the author's site. Set `AUTHOR_SITE_URL` in `src/config.ts`; until then it shows "قريبًا".
+  - **طريقة استخدام رسوخ** (`/guide`, open to everyone): a step-by-step guide to the whole app, with contents.
+    - It's linked clearly from the sign-in and sign-up pages.
+    - The old `/about` address redirects here.
+  - **مبرمج تطبيق رسوخ** (`/developer`): who made Rusookh, links to LinkedIn and Instagram, and «ادعيلي دعوة حلوة».
+    - The details live in `DEVELOPER` in `src/config.ts`.
+  - Paid accounts see their plan in the sidebar, with its end date, and a plan tag next to their name.
 
 ## Review schedule
 
@@ -190,7 +253,7 @@ src/
   hooks/                   useToday, memoized data views, shortcuts, theme…
   components/              AppLayout, KnowledgeCard, ActionMenu, Modal, forms, dialogs…
   lib/image-file.ts        scales and encodes picked images
-  config.ts                app settings (e.g. AUTHOR_SITE_URL)
+  config.ts                app settings (developer details, payment details)
   pages/                   Auth, About, Today (dashboard + stats), Review, Projects, ProjectDetails, Cards, Settings
   styles/                  CSS by responsibility; tokens in variables.css
 ```

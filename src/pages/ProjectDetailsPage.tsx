@@ -143,6 +143,10 @@ export function ProjectDetailsPage() {
               <Icon name="plus" size={18} />
               إضافة بطاقة
             </button>
+            <button type="button" className="btn btn--secondary" onClick={() => openDialog({ kind: 'ai-cards', projectId: project.id })}>
+              <Icon name="sparkle" size={18} />
+              بطاقات بالذكاء الاصطناعي
+            </button>
             {cardCount > 0 && (
               <p className="project-hero__hint">
                 {dueCount > 0

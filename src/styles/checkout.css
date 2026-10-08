@@ -1,0 +1,613 @@
+/* ==========================================================================
+   Checkout: numbered steps a student can follow on a phone, with big copy
+   buttons for every number they have to type into another app.
+   ========================================================================== */
+
+.checkout-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: var(--color-border);
+  border: 1px solid var(--color-border);
+}
+
+.checkout-step {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-5) var(--space-6);
+  background: var(--color-surface);
+}
+
+.checkout-step__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.checkout-step__number {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  font-family: var(--font-mono);
+  font-weight: var(--weight-semibold);
+  color: var(--color-on-brand);
+  background: var(--color-brand);
+}
+
+.checkout-step__title {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-bold);
+}
+
+.checkout-step__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* Radio tiles: period and payment method */
+.checkout-choices {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.checkout-choice {
+  position: relative;
+  cursor: pointer;
+}
+
+.checkout-choice input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.checkout-choice__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  height: 100%;
+  padding: var(--space-4);
+  background: var(--color-field);
+  border: 1px solid var(--color-border-strong);
+  transition:
+    border-color var(--duration-fast),
+    box-shadow var(--duration-fast);
+}
+
+.checkout-choice:hover .checkout-choice__body {
+  border-color: var(--color-text);
+}
+
+.checkout-choice input:checked + .checkout-choice__body {
+  border-color: var(--color-brand);
+  box-shadow: inset 0 0 0 1px var(--color-brand);
+}
+
+.checkout-choice input:focus-visible + .checkout-choice__body {
+  outline: 2px solid var(--color-text);
+  outline-offset: 2px;
+}
+
+.checkout-choice.is-disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.checkout-choice__title {
+  font-weight: var(--weight-semibold);
+}
+
+.checkout-choice__price {
+  font-family: var(--font-mono);
+  font-size: var(--text-xl);
+  font-weight: var(--weight-semibold);
+}
+
+.checkout-choice__note {
+  font-size: var(--text-xs);
+  color: var(--color-brand-strong);
+}
+
+/* Step 3: what to do, then the values to copy */
+.checkout-instructions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-inline-start: var(--space-5);
+  list-style: decimal;
+  line-height: 1.8;
+}
+
+.checkout-instructions li::marker {
+  font-family: var(--font-mono);
+  color: var(--color-text-subtle);
+}
+
+.copy-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: var(--color-border);
+  border: 1px solid var(--color-border);
+}
+
+.copy-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "label button"
+    "value button";
+  align-items: center;
+  column-gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-field);
+}
+
+.copy-field__label {
+  grid-area: label;
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.copy-field__value {
+  grid-area: value;
+  overflow-wrap: anywhere;
+  font-family: var(--font-mono);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  text-align: start;
+}
+
+.copy-field__button {
+  display: inline-flex;
+  grid-area: button;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 76px;
+  min-height: var(--touch-target);
+  justify-content: center;
+  padding: 0 var(--space-3);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  border: 1px solid var(--color-border-strong);
+  transition:
+    background-color var(--duration-fast),
+    border-color var(--duration-fast);
+}
+
+.copy-field__button:hover {
+  border-color: var(--color-text);
+}
+
+.copy-field__button.is-copied {
+  color: var(--color-on-brand);
+  background: var(--color-brand);
+  border-color: var(--color-brand);
+}
+
+.checkout-hint {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.checkout-hint a {
+  color: var(--color-brand-strong);
+  text-decoration: underline;
+}
+
+/* Step 4: receipt */
+.receipt-picker {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 72px;
+  padding: var(--space-4);
+  cursor: pointer;
+  color: var(--color-text-muted);
+  background: var(--color-field);
+  border: 1px dashed var(--color-border-strong);
+  transition: border-color var(--duration-fast);
+}
+
+.receipt-picker:hover,
+.receipt-picker:focus-within {
+  border-color: var(--color-text);
+}
+
+.receipt-picker.has-file {
+  color: var(--color-text);
+  border-style: solid;
+  border-color: var(--color-brand);
+}
+
+.receipt-picker input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.receipt-picker span {
+  overflow-wrap: anywhere;
+}
+
+.field__optional {
+  font-weight: var(--weight-regular);
+  color: var(--color-text-subtle);
+}
+
+.checkout-confirm {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  cursor: pointer;
+}
+
+.checkout-confirm input {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin-top: 3px;
+  accent-color: var(--color-brand);
+}
+
+.checkout-error {
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--color-danger);
+  background: var(--color-danger-soft, var(--color-surface));
+  border: 1px solid var(--color-danger);
+}
+
+/* Notes above the form */
+.checkout-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--text-sm);
+  background: var(--color-brand-soft);
+  border: 1px solid var(--color-brand-line);
+}
+
+.checkout-banner .icon {
+  flex: none;
+  margin-top: 3px;
+}
+
+.checkout-banner--error {
+  background: var(--color-surface);
+  border-color: var(--color-danger);
+}
+
+.link-button {
+  padding: 2px var(--space-2);
+  border: 1px solid var(--color-border-strong);
+}
+
+.link-button.is-current {
+  color: var(--color-on-inverse);
+  background: var(--color-inverse);
+}
+
+/* After sending */
+.checkout-status {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-4);
+  padding: var(--space-6);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+}
+
+.checkout-status__icon {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  color: var(--color-on-brand);
+  background: var(--color-brand);
+}
+
+.checkout-status__title {
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  font-weight: var(--weight-bold);
+}
+
+.checkout-status__details {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  width: 100%;
+  background: var(--color-border);
+  border: 1px solid var(--color-border);
+}
+
+.checkout-status__details div {
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-field);
+}
+
+.checkout-status__details dt {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.checkout-status__details dd {
+  font-family: var(--font-mono);
+  font-weight: var(--weight-semibold);
+}
+
+/* What happens next, as a little progress line */
+.checkout-next {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.checkout-next li {
+  position: relative;
+  padding-inline-start: var(--space-6);
+  font-size: var(--text-sm);
+  color: var(--color-text-subtle);
+}
+
+.checkout-next li::before {
+  position: absolute;
+  inset-block-start: 6px;
+  inset-inline-start: 0;
+  width: 10px;
+  height: 10px;
+  content: "";
+  border: 1px solid var(--color-border-strong);
+}
+
+.checkout-next li.is-done {
+  color: var(--color-text);
+}
+
+.checkout-next li.is-done::before {
+  background: var(--color-brand);
+  border-color: var(--color-brand);
+}
+
+.checkout-next li.is-current {
+  font-weight: var(--weight-semibold);
+  color: var(--color-text);
+}
+
+.checkout-next li.is-current::before {
+  border-color: var(--color-brand);
+  box-shadow: inset 0 0 0 2px var(--color-surface), inset 0 0 0 5px var(--color-brand);
+}
+
+.checkout-status__actions,
+.settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* ==========================================================================
+   Admin: payment requests
+   ========================================================================== */
+
+.admin-requests {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border-top: 1px solid var(--color-border);
+  border-inline-start: 1px solid var(--color-border);
+}
+
+.admin-request {
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr);
+  gap: var(--space-4);
+  padding: var(--space-4);
+  background: var(--color-surface);
+  border-inline-end: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.admin-receipt {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 3 / 4;
+  overflow: hidden;
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  text-align: center;
+  background: var(--color-field);
+  border: 1px solid var(--color-border);
+}
+
+.admin-receipt img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top;
+}
+
+.admin-receipt--file {
+  gap: var(--space-2);
+  padding: var(--space-2);
+}
+
+.admin-request__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.admin-request__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.admin-request__reference {
+  font-family: var(--font-mono);
+  font-weight: var(--weight-semibold);
+}
+
+.admin-request__status {
+  padding: 1px var(--space-2);
+  font-size: var(--text-2xs);
+  border: 1px solid var(--color-border-strong);
+}
+
+.admin-request__status.is-pending {
+  color: var(--color-on-brand);
+  background: var(--color-brand);
+  border-color: var(--color-brand);
+}
+
+.admin-request__status.is-rejected {
+  color: var(--color-danger);
+  border-color: var(--color-danger);
+}
+
+.admin-request__amount {
+  font-family: var(--font-mono);
+  font-size: var(--text-xl);
+  font-weight: var(--weight-semibold);
+}
+
+.admin-request__amount span {
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-regular);
+  color: var(--color-text-muted);
+}
+
+.admin-request__details {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: var(--text-sm);
+}
+
+.admin-request__details div {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.admin-request__details dt {
+  flex: none;
+  min-width: 6.5em;
+  color: var(--color-text-muted);
+}
+
+.admin-request__details dd {
+  overflow-wrap: anywhere;
+}
+
+.admin-request__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: auto;
+  padding-top: var(--space-2);
+}
+
+@media (max-width: 1100px) {
+  .admin-requests {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 560px) {
+  .checkout-step {
+    padding: var(--space-4);
+  }
+
+  .checkout-status {
+    padding: var(--space-5) var(--space-4);
+  }
+
+  .admin-request {
+    grid-template-columns: 96px minmax(0, 1fr);
+  }
+}
+
+/* ---------- Student price ---------- */
+
+.checkout-student,
+.settings-student {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.checkout-student {
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-brand-soft);
+  border: 1px solid var(--color-brand-line);
+}
+
+.checkout-student .icon,
+.settings-student .icon {
+  flex: none;
+  margin-top: 3px;
+  color: var(--color-brand-strong);
+}
+
+.settings-student.is-active {
+  font-weight: var(--weight-semibold);
+}
+
+.checkout-choice__was {
+  margin-inline-start: var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-regular);
+  color: var(--color-text-subtle);
+}
+
+.admin-request__student {
+  display: inline-block;
+  margin-inline-start: var(--space-2);
+  padding: 1px var(--space-2);
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-semibold);
+  color: var(--color-on-brand);
+  vertical-align: middle;
+  background: var(--color-brand);
+}
+
+/* The receiving bank: shown, not copied */
+.copy-field--static {
+  grid-template-areas:
+    "label"
+    "value";
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.copy-field__bank {
+  font-family: var(--font-sans);
+  font-size: var(--text-md);
+}
+
+.copy-field__bank span {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-regular);
+  color: var(--color-text-muted);
+}

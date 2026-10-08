@@ -1,0 +1,581 @@
+/* ==========================================================================
+   Pricing: three plan tiles in a hairline grid, the recommended one in brand
+   orange, numbers in mono like the rest of the app.
+   ========================================================================== */
+
+.pricing__header {
+  max-width: 40rem;
+  margin-bottom: var(--space-6);
+}
+
+.pricing__lead {
+  margin-top: var(--space-3);
+  color: var(--color-text-muted);
+}
+
+/* Why the user was sent here */
+.pricing-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
+  padding: var(--space-4) var(--space-5);
+  font-size: var(--text-sm);
+  background: var(--color-brand-soft);
+  border: 1px solid var(--color-brand-line);
+}
+
+.pricing-banner .icon {
+  flex: none;
+  margin-top: 2px;
+  color: var(--color-brand-strong);
+}
+
+/* Free account usage */
+.pricing-usage {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  margin-bottom: var(--space-6);
+  background: var(--color-border);
+  border: 1px solid var(--color-border);
+}
+
+.pricing-usage__item {
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface);
+}
+
+.pricing-usage__item dt {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.pricing-usage__item dd {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.pricing-usage__count {
+  font-family: var(--font-mono);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+}
+
+.pricing-usage__bar {
+  display: block;
+  height: 4px;
+  background: var(--color-surface-sunken);
+}
+
+.pricing-usage__bar span {
+  display: block;
+  height: 100%;
+  background: var(--color-text);
+}
+
+.pricing-usage__item.is-full .pricing-usage__count {
+  color: var(--color-brand-strong);
+}
+
+.pricing-usage__item.is-full .pricing-usage__bar span {
+  background: var(--color-brand);
+}
+
+/* Monthly / yearly */
+.billing-toggle {
+  display: inline-flex;
+  margin-bottom: var(--space-5);
+  border: 1px solid var(--color-border-strong);
+}
+
+.billing-toggle__option {
+  position: relative;
+  cursor: pointer;
+}
+
+.billing-toggle__option input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.billing-toggle__option > span {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 40px;
+  padding: 0 var(--space-4);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--color-text-muted);
+  background: var(--color-field);
+  transition:
+    color var(--duration-fast),
+    background-color var(--duration-fast);
+}
+
+.billing-toggle__option:hover > span {
+  color: var(--color-text);
+}
+
+.billing-toggle__option input:checked + span {
+  color: var(--color-on-inverse);
+  background: var(--color-inverse);
+}
+
+.billing-toggle__option input:focus-visible + span {
+  outline: 2px solid var(--color-text);
+  outline-offset: 2px;
+}
+
+.billing-toggle__save {
+  padding: 1px 6px;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--color-on-brand);
+  background: var(--color-brand);
+}
+
+/* The three plans */
+.plan-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-top: 1px solid var(--color-border);
+  border-inline-start: 1px solid var(--color-border);
+}
+
+.plan-card {
+  position: relative;
+  background: var(--color-surface);
+  border-inline-end: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
+  transition: background-color var(--duration-fast);
+}
+
+.plan-card > article {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  height: 100%;
+  padding: var(--space-6);
+}
+
+@media (hover: hover) {
+  .plan-card:hover {
+    background: var(--color-field);
+  }
+}
+
+/* Recommended: an orange frame drawn inside the tile */
+.plan-card.is-recommended {
+  background: var(--color-field);
+  box-shadow: inset 0 0 0 2px var(--color-brand);
+}
+
+.plan-card__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.plan-card__name {
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  font-weight: var(--weight-bold);
+}
+
+.plan-card__tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-inline-start: auto;
+  padding: 2px var(--space-2);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--color-on-brand);
+  background: var(--color-brand);
+}
+
+.plan-card__tag--ai {
+  color: var(--color-on-inverse);
+  background: var(--color-inverse);
+}
+
+.plan-card__tagline {
+  min-height: 3em;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.plan-card__price {
+  padding-block: var(--space-2) var(--space-1);
+  border-top: 1px dashed var(--color-border);
+}
+
+.plan-card__amount {
+  font-family: var(--font-mono);
+  font-size: var(--text-4xl);
+  font-weight: var(--weight-semibold);
+  line-height: 1.1;
+}
+
+.plan-card__unit {
+  margin-inline-start: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.plan-card__billing {
+  margin-top: var(--space-1);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--color-text-subtle);
+}
+
+.plan-card__features {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding-top: var(--space-4);
+  font-size: var(--text-sm);
+  border-top: 1px solid var(--color-border);
+}
+
+.plan-card__features li {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.plan-card__features .icon {
+  flex: none;
+  margin-top: 3px;
+  color: var(--color-text-subtle);
+}
+
+.plan-card--pro .plan-card__features li:not(:first-child) .icon,
+.plan-card.is-recommended .plan-card__features .icon {
+  color: var(--color-brand-strong);
+}
+
+.pricing__note {
+  margin-top: var(--space-3);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--color-text-subtle);
+}
+
+/* Included in every plan */
+.pricing-included {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3) var(--space-5);
+  margin-top: var(--space-8);
+  padding: var(--space-4) var(--space-5);
+  font-size: var(--text-sm);
+  border: 1px dashed var(--color-border-strong);
+}
+
+.pricing-included__title {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  color: var(--color-text-muted);
+}
+
+.pricing-included ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-5);
+}
+
+.pricing-included li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.pricing-included .icon {
+  color: var(--color-brand-strong);
+}
+
+/* FAQ */
+.pricing-faq {
+  margin-top: var(--space-10);
+}
+
+.pricing-faq__title {
+  margin-bottom: var(--space-3);
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-bold);
+}
+
+.pricing-faq__item {
+  border-top: 1px solid var(--color-border);
+}
+
+.pricing-faq__item:last-child {
+  border-bottom: 1px solid var(--color-border);
+}
+
+.pricing-faq__item summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-height: 52px;
+  font-weight: var(--weight-semibold);
+  list-style: none;
+  cursor: pointer;
+}
+
+.pricing-faq__item summary::-webkit-details-marker {
+  display: none;
+}
+
+.pricing-faq__item summary .icon {
+  flex: none;
+  color: var(--color-text-subtle);
+  transition: transform var(--duration-base) var(--ease-out);
+}
+
+.pricing-faq__item[open] summary .icon {
+  transform: rotate(45deg);
+}
+
+.pricing-faq__item p {
+  padding-bottom: var(--space-4);
+  color: var(--color-text-muted);
+}
+
+/* Sidebar: free plan usage */
+.sidebar-plan {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0 var(--space-3) var(--space-3);
+  padding: var(--space-3);
+  background: var(--color-field);
+  border: 1px solid var(--color-border);
+  transition: border-color var(--duration-fast);
+}
+
+.sidebar > .sidebar-plan {
+  border-bottom: 1px solid var(--color-border);
+}
+
+.sidebar-plan:hover {
+  border-color: var(--color-brand);
+}
+
+.sidebar-plan__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: var(--text-sm);
+}
+
+.sidebar-plan__name {
+  font-weight: var(--weight-semibold);
+}
+
+.sidebar-plan__upgrade {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  color: var(--color-brand-strong);
+}
+
+.sidebar-plan__bar {
+  display: block;
+  height: 4px;
+  background: var(--color-surface-sunken);
+}
+
+.sidebar-plan__bar span {
+  display: block;
+  height: 100%;
+  background: var(--color-brand);
+}
+
+.sidebar-plan__usage {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--color-text-subtle);
+}
+
+@media (max-width: 1000px) {
+  .plan-grid,
+  .pricing-usage {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .plan-card__tagline {
+    min-height: 0;
+  }
+}
+
+/* ---------- Student price ---------- */
+
+.pricing-student {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--text-sm);
+  background: var(--color-surface);
+  border: 1px dashed var(--color-border-strong);
+}
+
+.pricing-student .icon {
+  flex: none;
+  margin-top: 2px;
+  color: var(--color-brand-strong);
+}
+
+.pricing-student.is-active {
+  background: var(--color-brand-soft);
+  border: 1px solid var(--color-brand-line);
+}
+
+.plan-card__student {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin-bottom: var(--space-1);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  color: var(--color-brand-strong);
+}
+
+.plan-card__student s {
+  font-family: var(--font-mono);
+  font-weight: var(--weight-regular);
+  color: var(--color-text-subtle);
+}
+
+/* ---------- Founders' seats ---------- */
+
+.pricing-founders {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas:
+    "seats text"
+    "seats bar";
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+  margin-bottom: var(--space-5);
+  padding: var(--space-4) var(--space-5);
+  font-size: var(--text-sm);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  box-shadow: inset 0 0 0 1px var(--color-brand);
+}
+
+.pricing-founders__seats {
+  display: flex;
+  flex-direction: column;
+  grid-area: seats;
+  align-items: center;
+  min-width: 64px;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xl);
+  font-weight: var(--weight-semibold);
+  line-height: 1.1;
+  color: var(--color-brand-strong);
+}
+
+.pricing-founders__seats small {
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-regular);
+  color: var(--color-text-subtle);
+}
+
+.pricing-founders p {
+  grid-area: text;
+}
+
+.pricing-founders__bar {
+  display: block;
+  grid-area: bar;
+  height: 4px;
+  background: var(--color-surface-sunken);
+}
+
+.pricing-founders__bar span {
+  display: block;
+  height: 100%;
+  background: var(--color-brand);
+}
+
+/* ---------- Payment methods ---------- */
+
+.pricing-payment {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.pricing-payment .pricing__note {
+  margin-top: 0;
+}
+
+.pricing-payment__soon {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.pricing-payment__tag {
+  padding: 1px var(--space-2);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--color-on-inverse);
+  background: var(--color-inverse);
+}
+
+/* Paid plans in the sidebar: quiet, until renewal comes near */
+.sidebar-plan--paid {
+  border-color: var(--color-brand-line);
+}
+
+.sidebar-plan--paid .sidebar-plan__name {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.sidebar-plan--paid .sidebar-plan__name .icon {
+  color: var(--color-brand-strong);
+}
+
+.sidebar-plan--paid.is-ending {
+  background: var(--color-brand-soft);
+}
+
+/* Plan tag next to the user's name */
+.sidebar-user__plan {
+  display: inline-block;
+  margin-inline-start: var(--space-2);
+  padding: 0 6px;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-semibold);
+  line-height: 1.6;
+  color: var(--color-on-brand);
+  vertical-align: middle;
+  background: var(--color-brand);
+}

@@ -302,6 +302,64 @@
 
 /* ---------- Responsive ---------- */
 
+/* Password label with "نسيت كلمة المرور؟" at the other end */
+.field__label-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.field__label-link {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  color: var(--color-text-muted);
+  text-decoration: underline;
+  text-decoration-color: var(--color-border-strong);
+  text-underline-offset: 3px;
+  transition: color var(--duration-fast);
+}
+
+.field__label-link:hover {
+  color: var(--color-brand-strong);
+  text-decoration-color: currentColor;
+}
+
+/* "هل أنت طالب؟" */
+.auth-choices {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+/* Signing up as a student: the university email hint and live check */
+.auth-student-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+  padding: var(--space-3);
+  font-size: var(--text-sm);
+  background: var(--color-brand-soft);
+  border: 1px solid var(--color-brand-line);
+}
+
+.auth-student-hint .icon {
+  flex: none;
+  margin-top: 3px;
+  color: var(--color-brand-strong);
+}
+
+.auth-email-check {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.auth-email-check.is-academic {
+  font-weight: var(--weight-semibold);
+  color: var(--color-brand-strong);
+}
+
 @media (max-width: 900px) {
   .auth-layout {
     grid-template-columns: minmax(0, 1fr);

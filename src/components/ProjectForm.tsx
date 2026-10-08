@@ -1,4 +1,5 @@
 import { useId, useRef, useState, type CSSProperties, type FormEvent } from 'react';
+import { Link } from 'react-router';
 import { PROJECT_COLORS } from '../domain/project-colors';
 import { CUSTOM_PROJECT_TYPE, PROJECT_TYPES } from '../domain/project-types';
 import { SHELF_NAME_MAX_LENGTH, sortShelves } from '../domain/shelves';
@@ -15,6 +16,7 @@ type Errors = Partial<Record<'name' | 'customTypeLabel' | 'shelfName', string>>;
 export function ProjectForm({
   initial,
   shelves,
+  canAddShelf = true,
   submitLabel,
   lead,
   onSubmit,
@@ -22,6 +24,8 @@ export function ProjectForm({
 }: {
   initial: ProjectInput;
   shelves: readonly Shelf[];
+  /** False when the plan allows no more shelves. */
+  canAddShelf?: boolean;
   submitLabel: string;
   lead?: string;
   /** `newShelfName` is set when the user named a new shelf for the project. */
@@ -170,9 +174,19 @@ export function ProjectForm({
               {shelf.name}
             </option>
           ))}
-          <option value={NEW_SHELF}>+ رف جديد…</option>
+          <option value={NEW_SHELF} disabled={!canAddShelf}>
+            {canAddShelf ? '+ رف جديد…' : '+ رف جديد (في الخطط المدفوعة)'}
+          </option>
         </select>
-        <p className="field__hint">الرف يجمع مشاريع متشابهة، مثل رف «كتب» فيه مشروع لكل كتاب.</p>
+        <p className="field__hint">
+          الرف يجمع مشاريع متشابهة، مثل رف «كتب» فيه مشروع لكل كتاب.
+          {!canAddShelf && (
+            <>
+              {' '}
+              خطتك الحالية تسمح برف واحد، <Link to="/pricing" onClick={onCancel}>اعرف الخطط</Link>.
+            </>
+          )}
+        </p>
       </div>
 
       {isNewShelf && (

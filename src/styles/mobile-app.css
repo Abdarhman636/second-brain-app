@@ -1,0 +1,272 @@
+/* ==========================================================================
+   Mobile app page: the launch counter, then home-screen install steps.
+   ========================================================================== */
+
+.mobile-app__lead {
+  margin-top: var(--space-3);
+  color: var(--color-text-muted);
+}
+
+/* Live counter toward the launch */
+.app-counter {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-6);
+  margin-bottom: var(--space-6);
+  padding: var(--space-5) var(--space-6);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  box-shadow: inset 0 0 0 1px var(--color-brand);
+}
+
+.app-counter__number {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  font-family: var(--font-mono);
+  line-height: 1;
+}
+
+.app-counter__number span {
+  font-size: 3.25rem;
+  font-weight: var(--weight-semibold);
+  color: var(--color-brand-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+.app-counter__number small {
+  font-size: var(--text-lg);
+  color: var(--color-text-subtle);
+}
+
+.app-counter__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.app-counter__label {
+  font-weight: var(--weight-semibold);
+}
+
+.app-counter__bar {
+  display: block;
+  height: 6px;
+  background: var(--color-surface-sunken);
+}
+
+.app-counter__bar span {
+  display: block;
+  height: 100%;
+  background: var(--color-brand);
+  transition: width 900ms var(--ease-out);
+}
+
+.app-counter__note {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.mobile-app__installed {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-5);
+  font-weight: var(--weight-semibold);
+  background: var(--color-brand-soft);
+  border: 1px solid var(--color-brand-line);
+}
+
+/* Install steps */
+.install {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-4);
+  padding: var(--space-6);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+}
+
+.install__title {
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  font-weight: var(--weight-bold);
+}
+
+.install__time {
+  margin-top: var(--space-1);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-text-subtle);
+}
+
+.install__tabs {
+  display: inline-flex;
+  border: 1px solid var(--color-border-strong);
+}
+
+.install__tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 40px;
+  padding: 0 var(--space-4);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text-muted);
+  background: var(--color-field);
+}
+
+.install__tab[aria-selected="true"] {
+  color: var(--color-on-inverse);
+  background: var(--color-inverse);
+}
+
+.install__tab:focus-visible {
+  outline: 2px solid var(--color-text);
+  outline-offset: 2px;
+}
+
+.install__panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-6);
+  width: 100%;
+}
+
+.install__steps {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: var(--color-border);
+  border: 1px solid var(--color-border);
+}
+
+.install__step {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  line-height: 1.9;
+  background: var(--color-field);
+}
+
+.install__number {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin-top: 2px;
+  font-family: var(--font-mono);
+  font-weight: var(--weight-semibold);
+  color: var(--color-on-brand);
+  background: var(--color-brand);
+}
+
+/* A button name as the phone shows it */
+.ui-label {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  padding: 0 6px;
+  font-weight: var(--weight-semibold);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+}
+
+.ui-label .icon {
+  color: var(--color-brand-strong);
+}
+
+.ui-label__en {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-regular);
+  color: var(--color-text-subtle);
+}
+
+/* What the home screen icon looks like */
+.install__preview {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  align-self: start;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-5);
+  font-size: var(--text-xs);
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
+}
+
+.install__preview img {
+  border-radius: 16px;
+}
+
+.install__link {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  background: var(--color-field);
+  border: 1px dashed var(--color-border-strong);
+}
+
+.install__hint {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.mobile-app__perks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-6);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.mobile-app__perks li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.mobile-app__perks .icon {
+  flex: none;
+  color: var(--color-brand-strong);
+}
+
+@media (max-width: 600px) {
+  .app-counter {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-3);
+    padding: var(--space-4);
+  }
+
+  .install {
+    padding: var(--space-4);
+  }
+
+  .install__panel {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .install__preview {
+    flex-direction: row;
+    justify-self: start;
+  }
+
+  .install__preview img {
+    width: 48px;
+    height: 48px;
+    border-radius: 11px;
+  }
+}

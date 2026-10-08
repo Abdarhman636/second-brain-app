@@ -15,6 +15,7 @@ import type { DailyLimit, User } from '../domain/types';
 import { useAppStore } from '../store/app-store';
 import { useSessionStore } from '../store/session-store';
 import { memoryRepository } from './memory-repository';
+import { fetchSubscription } from './payments';
 import { DEMO_USER } from './mock-data';
 import { flushWrites } from './repository';
 import { supabase } from './supabase/client';
@@ -26,6 +27,8 @@ const MESSAGES = {
   invalidCredentials: 'البريد الإلكتروني أو كلمة المرور غير صحيحة.',
   emailNotConfirmed: 'لم يُؤكَّد بريدك بعد. افتح رسالة التأكيد التي أرسلناها إليك، أو اطلب رسالة جديدة.',
   emailTaken: 'هذا البريد مسجّل بالفعل. جرّب تسجيل الدخول.',
+  samePassword: 'اختر كلمة مرور مختلفة عن القديمة.',
+  resetExpired: 'انتهت صلاحية رابط تغيير كلمة المرور. اطلب رابطًا جديدًا.',
   weakPassword: `كلمة المرور ضعيفة. استخدم ${PASSWORD_MIN_LENGTH} أحرف على الأقل، ومزيجًا من الحروف والأرقام.`,
   rateLimited: 'محاولات كثيرة خلال وقت قصير. انتظر قليلًا ثم حاول مجددًا.',
   invalidEmail: 'تأكد من صيغة البريد الإلكتروني.',
@@ -46,6 +49,11 @@ function describeAuthError(error: AuthError): string {
       return MESSAGES.emailTaken;
     case 'weak_password':
       return MESSAGES.weakPassword;
+    case 'same_password':
+      return MESSAGES.samePassword;
+    case 'session_not_found':
+    case 'session_expired':
+      return MESSAGES.resetExpired;
     case 'over_email_send_rate_limit':
     case 'over_request_rate_limit':
       return MESSAGES.rateLimited;
@@ -66,7 +74,11 @@ function readDailyLimit(metadata: Record<string, unknown>): DailyLimit {
 function toUser(user: SupabaseUser): User {
   const email = user.email ?? '';
   const name = typeof user.user_metadata.name === 'string' && user.user_metadata.name.trim() ? user.user_metadata.name : email.split('@')[0];
-  return { id: user.id, name: name ?? '', email, dailyLimit: readDailyLimit(user.user_metadata) };
+  const isStudent = typeof user.user_metadata.is_student === 'boolean' ? user.user_metadata.is_student : null;
+  // Roles live in app_metadata, which only the server can change (user_metadata is editable by the user).
+  // The plan is filled in from the subscriptions table when the account loads.
+  const isAdmin = user.app_metadata.role === 'admin';
+  return { id: user.id, name: name ?? '', email, dailyLimit: readDailyLimit(user.user_metadata), isStudent, plan: 'free', planExpiresAt: null, isAdmin };
 }
 
 /* ---------- Loading a signed-in user ---------- */
@@ -81,8 +93,9 @@ async function loadAccount(supabaseUser: SupabaseUser) {
   setPhase('loading');
   try {
     const repository = createSupabaseRepository(supabase, supabaseUser.id);
-    const data = await repository.loadUserData(getToday());
-    useAppStore.getState().startSession(toUser(supabaseUser), data, repository);
+    const [data, subscription] = await Promise.all([repository.loadUserData(getToday()), fetchSubscription(supabase, supabaseUser.id)]);
+    const user = { ...toUser(supabaseUser), plan: subscription.plan, planExpiresAt: subscription.expiresAt };
+    useAppStore.getState().startSession(user, data, repository);
     setPhase('signed-in');
   } catch (error) {
     console.error('[session] could not load user data', error);
@@ -109,6 +122,10 @@ export function initSession(): () => void {
       if (event === 'SIGNED_OUT') {
         if (useAppStore.getState().mode === 'account') useAppStore.getState().endSession();
         setPhase('signed-out');
+      } else if (event === 'PASSWORD_RECOVERY' && session?.user) {
+        // Opened a password-reset link: signed in, but a new password comes first.
+        useSessionStore.getState().setPasswordRecovery(true);
+        void loadAccount(session.user);
       } else if (session?.user && (event === 'INITIAL_SESSION' || event === 'SIGNED_IN')) {
         void loadAccount(session.user);
       } else if (event === 'INITIAL_SESSION') {
@@ -116,7 +133,10 @@ export function initSession(): () => void {
         if (useAppStore.getState().mode !== 'demo') setPhase('signed-out');
       } else if (event === 'USER_UPDATED' && session?.user) {
         const current = useAppStore.getState().user;
-        if (current?.id === session.user.id) useAppStore.setState({ user: toUser(session.user) });
+        // Keep the plan: it comes from the subscriptions table, not the auth user.
+        if (current?.id === session.user.id) {
+          useAppStore.setState({ user: { ...toUser(session.user), plan: current.plan, planExpiresAt: current.planExpiresAt } });
+        }
       }
     }, 0);
   });
@@ -141,12 +161,12 @@ export async function signIn(email: string, password: string): Promise<AuthOutco
   return error ? { error: describeAuthError(error) } : {};
 }
 
-export async function signUp(name: string, email: string, password: string): Promise<AuthOutcome> {
+export async function signUp(name: string, email: string, password: string, isStudent: boolean): Promise<AuthOutcome> {
   if (!supabase) return { error: MESSAGES.unavailable };
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
-    options: { data: { name }, emailRedirectTo: window.location.origin },
+    options: { data: { name, is_student: isStudent }, emailRedirectTo: window.location.origin },
   });
   if (error) return { error: describeAuthError(error) };
   // With email confirmation on, an existing address comes back as a user with no identities.
@@ -157,6 +177,51 @@ export async function signUp(name: string, email: string, password: string): Pro
 export async function resendConfirmation(email: string): Promise<AuthOutcome> {
   if (!supabase) return { error: MESSAGES.unavailable };
   const { error } = await supabase.auth.resend({ type: 'signup', email, options: { emailRedirectTo: window.location.origin } });
+  return error ? { error: describeAuthError(error) } : {};
+}
+
+/* ---------- Forgotten password ---------- */
+
+/**
+ * Email a link for choosing a new password. The link signs the user in and
+ * opens /reset-password. For privacy, the answer is the same whether or not
+ * the address has an account.
+ */
+export async function requestPasswordReset(email: string): Promise<AuthOutcome> {
+  if (!supabase) return { error: MESSAGES.unavailable };
+  const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: `${window.location.origin}/reset-password` });
+  return error ? { error: describeAuthError(error) } : {};
+}
+
+/** Set a new password for the signed-in user (after following a reset link). */
+export async function updatePassword(password: string): Promise<AuthOutcome> {
+  if (!supabase) return { error: MESSAGES.unavailable };
+  const { error } = await supabase.auth.updateUser({ password });
+  if (error) return { error: describeAuthError(error) };
+  useSessionStore.getState().setPasswordRecovery(false);
+  return {};
+}
+
+/** Answer (or change) "are you a student?": saved on the account, or just for this visit in demo mode. */
+export async function updateIsStudent(isStudent: boolean): Promise<AuthOutcome> {
+  const { user, mode } = useAppStore.getState();
+  if (!user) return {};
+  if (mode === 'account' && supabase) {
+    const { error } = await supabase.auth.updateUser({ data: { is_student: isStudent } });
+    if (error) return { error: describeAuthError(error) };
+  }
+  useAppStore.setState({ user: { ...user, isStudent } });
+  return {};
+}
+
+/**
+ * Move the account to a new email (e.g. a university one, for the student
+ * price). Supabase emails a confirmation link; the change happens once it's
+ * followed, and the session listener then picks up the new address.
+ */
+export async function requestEmailChange(email: string): Promise<AuthOutcome> {
+  if (!supabase || useAppStore.getState().mode !== 'account') return { error: MESSAGES.unavailable };
+  const { error } = await supabase.auth.updateUser({ email }, { emailRedirectTo: `${window.location.origin}/settings` });
   return error ? { error: describeAuthError(error) } : {};
 }
 
@@ -196,5 +261,6 @@ export async function signOut() {
   await flushWrites();
   endSession();
   useSessionStore.getState().setPhase('signed-out');
+  useSessionStore.getState().setPasswordRecovery(false);
   if (mode === 'account') await supabase?.auth.signOut();
 }

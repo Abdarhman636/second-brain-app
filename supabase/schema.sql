@@ -191,6 +191,328 @@ drop trigger if exists projects_check_shelf_owner on public.projects;
 create trigger projects_check_shelf_owner before insert or update of shelf_id, user_id on public.projects
   for each row execute function public.check_project_shelf_owner();
 
+-- ---------- Admins ---------------------------------------------------------------
+-- An admin reviews payment requests. Admins are marked in app metadata, which
+-- only the server can change. To make an account an admin (then sign in again):
+--   update auth.users set raw_app_meta_data = raw_app_meta_data || '{"role": "admin"}'
+--   where email = 'you@example.com';
+
+create or replace function public.is_admin()
+returns boolean
+language sql
+stable
+set search_path = ''
+as $$
+  select coalesce((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin', false);
+$$;
+
+-- ---------- Subscriptions ---------------------------------------------------------
+-- A paid plan and when it ends. No row (or an expired one) means the free plan.
+-- Users can read their own; only admins (through approve_payment_request, or
+-- by hand) write them.
+--
+-- To give an account a plan by hand (e.g. for testing):
+--   insert into public.subscriptions (user_id, plan, expires_at)
+--   select id, 'plus', now() + interval '12 months' from auth.users where email = 'someone@example.com'
+--   on conflict (user_id) do update set plan = excluded.plan, expires_at = excluded.expires_at;
+
+create table if not exists public.subscriptions (
+  user_id    uuid primary key references auth.users (id) on delete cascade,
+  plan       text not null check (plan in ('plus', 'pro')),
+  expires_at timestamptz not null,
+  updated_at timestamptz not null default now()
+);
+
+alter table public.subscriptions enable row level security;
+
+drop policy if exists "Read own subscription" on public.subscriptions;
+create policy "Read own subscription" on public.subscriptions for select to authenticated
+  using ((select auth.uid()) = user_id or (select public.is_admin()));
+
+drop policy if exists "Admins manage subscriptions" on public.subscriptions;
+create policy "Admins manage subscriptions" on public.subscriptions for all to authenticated
+  using ((select public.is_admin()))
+  with check ((select public.is_admin()));
+
+-- ---------- Payment requests --------------------------------------------------------
+-- A student's transfer, waiting for an admin to check it against the bank or
+-- STC Pay and approve it. Prices are set here, not by the app (keep them in
+-- sync with src/domain/plans.ts).
+
+-- Students on a university email pay the student price. "University" means an
+-- academic domain (…edu, …edu.sa, …ac.uk); keep in sync with src/domain/students.ts.
+create or replace function public.is_academic_email(email text)
+returns boolean
+language sql
+immutable
+set search_path = ''
+as $$
+  select coalesce(lower(split_part(email, '@', 2)) ~ '(^|\.)(edu|edu\.[a-z]{2}|ac\.[a-z]{2})$', false);
+$$;
+
+-- ---------- Founders ----------------------------------------------------------------
+-- The first 100 subscribers pay the launch prices and keep them on every
+-- renewal. A seat is taken when an admin approves a founder-priced request.
+
+create table if not exists public.founders (
+  user_id   uuid primary key references auth.users (id) on delete cascade,
+  joined_at timestamptz not null default now()
+);
+
+alter table public.founders enable row level security;
+
+drop policy if exists "Read own founder seat" on public.founders;
+create policy "Read own founder seat" on public.founders for select to authenticated
+  using ((select auth.uid()) = user_id or (select public.is_admin()));
+
+-- Public: seats left, and whether the caller holds one.
+create or replace function public.founder_status()
+returns json
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select json_build_object(
+    'seats', 100,
+    'taken', (select count(*) from public.founders),
+    'is_founder', exists (select 1 from public.founders f where f.user_id = auth.uid())
+  );
+$$;
+
+-- Public: how many people use Rusookh (confirmed accounts), for the mobile app page.
+create or replace function public.public_user_count()
+returns integer
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select count(*)::integer from auth.users where email_confirmed_at is not null;
+$$;
+
+revoke execute on function public.founder_status() from public;
+revoke execute on function public.public_user_count() from public;
+grant execute on function public.founder_status() to anon, authenticated;
+grant execute on function public.public_user_count() to anon, authenticated;
+
+-- ---------- Prices ---------------------------------------------------------------------
+-- Keep in sync with src/domain/plans.ts.
+
+drop function if exists public.plan_price(text, text);
+drop function if exists public.plan_price(text, text, boolean);
+create or replace function public.plan_price(plan text, period text, student boolean, founder boolean)
+returns numeric
+language sql
+immutable
+set search_path = ''
+as $$
+  select case
+    when plan = 'plus' and period = 'half' then
+      case when founder and student then 19 when founder or student then 29 else 49 end
+    when plan = 'plus' and period = 'year' then
+      case when founder and student then 35 when founder or student then 49 else 79 end
+    when plan = 'pro' and period = 'half' then
+      case when founder and student then 39 when founder or student then 59 else 99 end
+    when plan = 'pro' and period = 'year' then
+      case when founder and student then 69 when founder or student then 99 else 149 end
+  end;
+$$;
+
+create table if not exists public.payment_requests (
+  id           uuid primary key default gen_random_uuid(),
+  user_id      uuid not null default auth.uid() references auth.users (id) on delete cascade,
+  user_email   text not null default (auth.jwt() ->> 'email'),
+  plan         text not null check (plan in ('plus', 'pro')),
+  period       text not null check (period in ('half', 'year')),
+  amount       numeric(8, 2) not null default 0,
+  method       text not null check (method in ('bank')),
+  reference    text not null check (char_length(reference) <= 20),
+  payer_name   text check (payer_name is null or char_length(payer_name) <= 80),
+  receipt_path text not null,
+  status       text not null default 'pending' check (status in ('pending', 'approved', 'rejected')),
+  review_note  text check (review_note is null or char_length(review_note) <= 300),
+  created_at   timestamptz not null default now(),
+  reviewed_at  timestamptz
+);
+
+-- Added later: changes for databases created before them.
+alter table public.payment_requests add column if not exists student_price boolean not null default false;
+alter table public.payment_requests add column if not exists founder_price boolean not null default false;
+alter table public.payment_requests drop constraint if exists payment_requests_method_check;
+-- NOT VALID: old requests (e.g. by STC Pay, since removed) stay as they are; new ones must be bank transfers.
+alter table public.payment_requests add constraint payment_requests_method_check check (method in ('bank')) not valid;
+
+create index if not exists payment_requests_user_id_idx on public.payment_requests (user_id);
+create index if not exists payment_requests_status_idx on public.payment_requests (status, created_at);
+-- One request waiting at a time per student.
+create unique index if not exists payment_requests_one_pending_idx on public.payment_requests (user_id) where status = 'pending';
+
+-- The email comes from the session, the price from the price list (the
+-- student price only for a confirmed university email and the student answer),
+-- and new requests always start pending.
+create or replace function public.prepare_payment_request()
+returns trigger
+language plpgsql
+-- Definer: it counts every founder seat, which the student's own access (RLS) can't see.
+security definer
+set search_path = ''
+as $$
+begin
+  new.user_email := coalesce(auth.jwt() ->> 'email', new.user_email);
+  new.student_price := public.is_academic_email(new.user_email)
+    and coalesce((auth.jwt() -> 'user_metadata' ->> 'is_student')::boolean, false);
+  -- Founder price for founders, and for anyone while seats are left.
+  new.founder_price := exists (select 1 from public.founders f where f.user_id = new.user_id)
+    or (select count(*) from public.founders) < 100;
+  new.amount := public.plan_price(new.plan, new.period, new.student_price, new.founder_price);
+  new.status := 'pending';
+  new.review_note := null;
+  new.reviewed_at := null;
+  new.created_at := now();
+  return new;
+end;
+$$;
+
+drop trigger if exists payment_requests_prepare on public.payment_requests;
+create trigger payment_requests_prepare before insert on public.payment_requests
+  for each row execute function public.prepare_payment_request();
+
+alter table public.payment_requests enable row level security;
+
+drop policy if exists "Read own requests" on public.payment_requests;
+create policy "Read own requests" on public.payment_requests for select to authenticated
+  using ((select auth.uid()) = user_id or (select public.is_admin()));
+
+drop policy if exists "Create own requests" on public.payment_requests;
+create policy "Create own requests" on public.payment_requests for insert to authenticated
+  with check ((select auth.uid()) = user_id);
+
+-- A student can withdraw a request until it's reviewed.
+drop policy if exists "Cancel own pending requests" on public.payment_requests;
+create policy "Cancel own pending requests" on public.payment_requests for delete to authenticated
+  using ((select auth.uid()) = user_id and status = 'pending');
+
+-- Approve: give (or extend) the plan, from today or from the current end
+-- date if the plan is still running.
+create or replace function public.approve_payment_request(request_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  request public.payment_requests;
+  current_end timestamptz;
+begin
+  if not public.is_admin() then
+    raise exception 'Only admins can approve payments';
+  end if;
+
+  select * into request from public.payment_requests where id = request_id for update;
+  if request.id is null or request.status <> 'pending' then
+    raise exception 'This request is not waiting for review';
+  end if;
+
+  select expires_at into current_end from public.subscriptions where user_id = request.user_id;
+  insert into public.subscriptions (user_id, plan, expires_at, updated_at)
+  values (
+    request.user_id,
+    request.plan,
+    greatest(coalesce(current_end, now()), now())
+      + make_interval(months => case request.period when 'half' then 6 else 12 end),
+    now()
+  )
+  on conflict (user_id) do update
+    set plan = excluded.plan, expires_at = excluded.expires_at, updated_at = now();
+
+  -- A founder-priced payment takes a seat (kept even if seats ran out while it waited: it was paid at that price).
+  if request.founder_price then
+    insert into public.founders (user_id) values (request.user_id) on conflict (user_id) do nothing;
+  end if;
+
+  update public.payment_requests set status = 'approved', reviewed_at = now() where id = request_id;
+end;
+$$;
+
+create or replace function public.reject_payment_request(request_id uuid, note text)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if not public.is_admin() then
+    raise exception 'Only admins can reject payments';
+  end if;
+  update public.payment_requests
+    set status = 'rejected', review_note = left(note, 300), reviewed_at = now()
+    where id = request_id and status = 'pending';
+  if not found then
+    raise exception 'This request is not waiting for review';
+  end if;
+end;
+$$;
+
+revoke execute on function public.approve_payment_request(uuid) from public, anon;
+revoke execute on function public.reject_payment_request(uuid, text) from public, anon;
+grant execute on function public.approve_payment_request(uuid) to authenticated;
+grant execute on function public.reject_payment_request(uuid, text) to authenticated;
+
+-- ---------- Plans: free limits --------------------------------------------------
+-- An account is on the free plan unless it has a subscription that hasn't
+-- expired. Keep the numbers in sync with src/domain/plans.ts.
+
+create or replace function public.enforce_plan_limits()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  user_plan text;
+  max_rows integer;
+  current_rows integer;
+  already_exists boolean;
+begin
+  select sub.plan into user_plan from public.subscriptions sub where sub.user_id = new.user_id and sub.expires_at > now();
+  if user_plan in ('plus', 'pro') then
+    return new;
+  end if;
+
+  -- The app saves with upsert, which fires insert triggers for updates too: only new rows count.
+  execute format('select exists (select 1 from public.%I where id = $1)', tg_table_name) into already_exists using new.id;
+  if already_exists then
+    return new;
+  end if;
+
+  max_rows := case tg_table_name when 'shelves' then 1 when 'projects' then 2 when 'cards' then 20 end;
+  execute format('select count(*) from public.%I where user_id = $1', tg_table_name) into current_rows using new.user_id;
+  if current_rows >= max_rows then
+    raise exception 'plan_limit:%', tg_table_name using hint = 'Upgrade the plan to add more.';
+  end if;
+  return new;
+end;
+$$;
+
+-- Only triggers may call it.
+revoke execute on function public.enforce_plan_limits() from public, anon, authenticated;
+
+do $$
+declare
+  table_name text;
+begin
+  foreach table_name in array array['shelves', 'projects', 'cards'] loop
+    execute format('drop trigger if exists %I on public.%I', table_name || '_enforce_plan_limits', table_name);
+    execute format(
+      'create trigger %I before insert on public.%I for each row execute function public.enforce_plan_limits()',
+      table_name || '_enforce_plan_limits',
+      table_name
+    );
+  end loop;
+end;
+$$;
+
 -- ---------- Storage: card images ----------------------------------------------
 -- Private bucket; each user reads and writes only under "<their user id>/...".
 -- The app shows images through short-lived signed URLs.
@@ -206,3 +528,185 @@ drop policy if exists "Card images: own folder" on storage.objects;
 create policy "Card images: own folder" on storage.objects for all to authenticated
   using (bucket_id = 'card-images' and (storage.foldername(name))[1] = (select auth.uid())::text)
   with check (bucket_id = 'card-images' and (storage.foldername(name))[1] = (select auth.uid())::text);
+
+-- ---------- AI cards: usage limits -------------------------------------------------
+-- Making cards with AI (the راسخ plan) is limited twice, per calendar month:
+--   * per user  (ai_monthly_cards_per_user; keep in sync with aiCardsPerMonth in src/domain/plans.ts)
+--   * app-wide  (ai_monthly_cards_total). Keep its cost BELOW the monthly spend
+--     limit set in the Anthropic Console, so the app stops politely before
+--     Anthropic stops answering. With Claude Haiku 5.5, 5,000 cards cost about $1.
+-- Change a limit with SQL, e.g.:
+--   update public.app_settings set value = 3000 where key = 'ai_monthly_cards_total';
+
+create table if not exists public.app_settings (
+  key   text primary key,
+  value integer not null
+);
+
+-- No policies: only the functions below read it.
+alter table public.app_settings enable row level security;
+
+insert into public.app_settings (key, value) values
+  ('ai_monthly_cards_total', 5000),
+  ('ai_monthly_cards_per_user', 300),
+  ('ai_cards_per_request', 15)
+on conflict (key) do nothing;
+
+create table if not exists public.ai_usage (
+  id           uuid primary key default gen_random_uuid(),
+  user_id      uuid not null references auth.users (id) on delete cascade,
+  cards        integer not null check (cards > 0),
+  mode         text not null check (mode in ('text', 'image')),
+  -- Known only to the server function that reserved it, so a user can't refund a used reservation.
+  refund_token uuid not null default gen_random_uuid(),
+  created_at   timestamptz not null default now()
+);
+
+create index if not exists ai_usage_created_idx on public.ai_usage (created_at);
+create index if not exists ai_usage_user_created_idx on public.ai_usage (user_id, created_at);
+
+alter table public.ai_usage enable row level security;
+
+drop policy if exists "Read own AI usage" on public.ai_usage;
+create policy "Read own AI usage" on public.ai_usage for select to authenticated
+  using ((select auth.uid()) = user_id or (select public.is_admin()));
+
+create or replace function public.app_setting(setting text)
+returns integer
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select value from public.app_settings where key = setting;
+$$;
+
+-- AI cards are for راسخ subscribers (and admins, to test).
+create or replace function public.can_use_ai(uid uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select public.is_admin()
+    or exists (select 1 from public.subscriptions s where s.user_id = uid and s.plan = 'pro' and s.expires_at > now());
+$$;
+
+-- What the signed-in user has left this month.
+create or replace function public.ai_usage_status()
+returns json
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  uid uuid := auth.uid();
+  per_user integer := public.app_setting('ai_monthly_cards_per_user');
+  used integer;
+begin
+  select coalesce(sum(cards), 0) into used
+    from public.ai_usage where user_id = uid and created_at >= date_trunc('month', now());
+  return json_build_object(
+    'allowed', uid is not null and public.can_use_ai(uid),
+    'used', used,
+    'limit', per_user,
+    'remaining', greatest(per_user - used, 0),
+    'per_request', public.app_setting('ai_cards_per_request')
+  );
+end;
+$$;
+
+-- Called by the generate-cards function before asking the AI: checks both
+-- limits and reserves the cards. Raises ai_not_allowed / ai_bad_request /
+-- ai_user_limit / ai_global_limit.
+create or replace function public.reserve_ai_cards(requested integer, request_mode text)
+returns json
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $$
+declare
+  uid uuid := auth.uid();
+  per_user integer := public.app_setting('ai_monthly_cards_per_user');
+  total integer := public.app_setting('ai_monthly_cards_total');
+  user_used integer;
+  all_used integer;
+  usage public.ai_usage;
+begin
+  if uid is null or not public.can_use_ai(uid) then
+    raise exception 'ai_not_allowed';
+  end if;
+  if requested is null or requested < 1 or requested > public.app_setting('ai_cards_per_request') then
+    raise exception 'ai_bad_request';
+  end if;
+
+  -- One reservation at a time, so two requests can't both squeeze under a limit.
+  perform pg_advisory_xact_lock(hashtext('ai_usage'));
+
+  select coalesce(sum(cards), 0) into user_used
+    from public.ai_usage where user_id = uid and created_at >= date_trunc('month', now());
+  if user_used + requested > per_user then
+    raise exception 'ai_user_limit';
+  end if;
+
+  select coalesce(sum(cards), 0) into all_used
+    from public.ai_usage where created_at >= date_trunc('month', now());
+  if all_used + requested > total then
+    raise exception 'ai_global_limit';
+  end if;
+
+  insert into public.ai_usage (user_id, cards, mode) values (uid, requested, request_mode) returning * into usage;
+  return json_build_object('id', usage.id, 'refund_token', usage.refund_token, 'remaining', per_user - user_used - requested);
+end;
+$$;
+
+-- After the AI answered: charge only the cards it actually made (0 = refund,
+-- e.g. when the request failed). Can only lower a reservation, never raise it.
+create or replace function public.settle_ai_cards(usage_id uuid, token uuid, actual integer)
+returns void
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $$
+begin
+  if coalesce(actual, 0) <= 0 then
+    delete from public.ai_usage
+      where id = usage_id and refund_token = token and user_id = auth.uid() and created_at > now() - interval '15 minutes';
+  else
+    update public.ai_usage set cards = least(cards, actual)
+      where id = usage_id and refund_token = token and user_id = auth.uid() and created_at > now() - interval '15 minutes';
+  end if;
+end;
+$$;
+
+revoke execute on function public.app_setting(text) from public, anon, authenticated;
+revoke execute on function public.can_use_ai(uuid) from public, anon, authenticated;
+revoke execute on function public.ai_usage_status() from public, anon;
+revoke execute on function public.reserve_ai_cards(integer, text) from public, anon;
+revoke execute on function public.settle_ai_cards(uuid, uuid, integer) from public, anon;
+grant execute on function public.ai_usage_status() to authenticated;
+grant execute on function public.reserve_ai_cards(integer, text) to authenticated;
+grant execute on function public.settle_ai_cards(uuid, uuid, integer) to authenticated;
+
+-- ---------- Storage: payment receipts -------------------------------------------
+-- Private. A student uploads under "<their user id>/..."; admins can read all.
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('payment-receipts', 'payment-receipts', false, 5242880, array['image/png', 'image/jpeg', 'image/webp', 'application/pdf'])
+on conflict (id) do update
+  set public = excluded.public,
+      file_size_limit = excluded.file_size_limit,
+      allowed_mime_types = excluded.allowed_mime_types;
+
+drop policy if exists "Payment receipts: own folder" on storage.objects;
+create policy "Payment receipts: own folder" on storage.objects for all to authenticated
+  using (bucket_id = 'payment-receipts' and (storage.foldername(name))[1] = (select auth.uid())::text)
+  with check (bucket_id = 'payment-receipts' and (storage.foldername(name))[1] = (select auth.uid())::text);
+
+drop policy if exists "Payment receipts: admins read" on storage.objects;
+create policy "Payment receipts: admins read" on storage.objects for select to authenticated
+  using (bucket_id = 'payment-receipts' and (select public.is_admin()));

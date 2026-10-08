@@ -389,6 +389,10 @@
   width: min(420px, calc(100vw - 2 * var(--space-4)));
 }
 
+.modal--wide {
+  width: min(720px, calc(100vw - 2 * var(--space-4)));
+}
+
 .modal[open] {
   display: flex;
   animation: modal-in var(--duration-base) var(--ease-out);

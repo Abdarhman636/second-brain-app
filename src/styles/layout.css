@@ -247,10 +247,6 @@ button.sidebar__link:hover {
   color: var(--color-text-subtle);
 }
 
-.sidebar__link.is-pending {
-  cursor: default;
-}
-
 .sidebar__copyright {
   padding: var(--space-3) var(--space-2) 0;
   font-family: var(--font-mono);
@@ -410,30 +406,7 @@ a.app-footer__link:hover {
   color: var(--color-text-subtle);
 }
 
-.app-footer__link.is-pending {
-  cursor: default;
-}
-
-.app-footer__soon {
-  padding: 1px var(--space-2);
-  font-family: var(--font-mono);
-  font-size: var(--text-2xs);
-  color: var(--color-text-subtle);
-  border: 1px solid var(--color-border);
-}
-
 /* The header already shows the brand on this page */
-.about-page .auth-intro__brand {
-  display: none;
-}
-
-.about-page__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-3);
-  margin-top: var(--space-10);
-}
-
 /* ==========================================================================
    Page scaffolding
    ========================================================================== */

@@ -1,0 +1,187 @@
+/* ==========================================================================
+   AI cards: the entry link, compose form, loading state and review list.
+   ========================================================================== */
+
+/* "أنشئ بطاقات بالذكاء الاصطناعي" at the top of the new-card dialog */
+.ai-entry {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  margin-bottom: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--text-sm);
+  text-align: start;
+  background: var(--color-brand-soft);
+  border: 1px solid var(--color-brand-line);
+  transition: border-color var(--duration-fast);
+}
+
+.ai-entry span {
+  flex: 1;
+}
+
+.ai-entry .icon:first-child {
+  color: var(--color-brand-strong);
+}
+
+.ai-entry:hover {
+  border-color: var(--color-brand);
+}
+
+.ai-compose__text {
+  min-height: 180px;
+  resize: vertical;
+}
+
+.ai-compose__count {
+  font-family: var(--font-mono);
+}
+
+.ai-compose__preview {
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  border: 1px solid var(--color-border);
+}
+
+.ai-compose__counts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.ai-compose__counts .type-option__input:disabled + .type-option__label {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.ai-compose__quota {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.ai-compose__quota .icon {
+  color: var(--color-brand-strong);
+}
+
+/* While the AI works */
+.ai-loading,
+.ai-upsell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-8) var(--space-4);
+  text-align: center;
+}
+
+.ai-loading__mark,
+.ai-upsell__mark {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  color: var(--color-on-brand);
+  background: var(--color-brand);
+}
+
+.ai-loading__mark {
+  animation: ai-pulse 1.4s ease-in-out infinite;
+}
+
+.ai-loading p:first-of-type {
+  font-weight: var(--weight-semibold);
+}
+
+.ai-loading__hint {
+  font-size: var(--text-xs);
+  color: var(--color-text-subtle);
+}
+
+.ai-upsell {
+  padding-block: var(--space-4) 0;
+}
+
+.ai-upsell__title {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-bold);
+}
+
+.ai-upsell .form-footer {
+  justify-content: center;
+  width: 100%;
+}
+
+@keyframes ai-pulse {
+  50% {
+    transform: scale(0.92);
+    opacity: 0.75;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-loading__mark {
+    animation: none;
+  }
+}
+
+/* Review: each suggestion, editable, with a keep checkbox */
+.ai-review__list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-block: var(--space-4);
+  background: var(--color-border);
+  border: 1px solid var(--color-border);
+}
+
+.ai-review__card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface);
+  transition: opacity var(--duration-fast);
+}
+
+.ai-review__card.is-skipped {
+  opacity: 0.5;
+}
+
+.ai-review__keep {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  cursor: pointer;
+}
+
+.ai-review__keep input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--color-brand);
+}
+
+.ai-review__field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ai-review__field > span {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.ai-review__field .textarea {
+  min-height: 0;
+  resize: vertical;
+}
+
+.checkout-payment {
+  margin: 0 0 var(--space-5);
+}

@@ -21,7 +21,7 @@ function reviewEverything() {
 }
 
 beforeEach(() => {
-  store().startSession({ id: 'user-demo', name: 'نور', email: '', dailyLimit: null }, createMockData(TODAY), memoryRepository);
+  store().startSession({ id: 'user-demo', name: 'نور', email: '', dailyLimit: null, isStudent: null, plan: 'free', planExpiresAt: null, isAdmin: false }, createMockData(TODAY), memoryRepository);
 });
 
 describe('review flow', () => {

@@ -1,8 +1,7 @@
 import { Link } from 'react-router';
-import { AUTHOR_SITE_URL } from '../config';
 import { Icon } from './Icon';
 
-/** Site-wide footer: what Rusookh is, and a link to the author's site. */
+/** Site-wide footer: the guide, the mobile app, plans, and who made Rusookh. */
 export function Footer() {
   return (
     <footer className="app-footer">
@@ -11,24 +10,28 @@ export function Footer() {
         <nav aria-label="روابط إضافية">
           <ul className="app-footer__links" role="list">
             <li>
-              <Link className="app-footer__link" to="/about">
-                <Icon name="info" size={16} />
-                ما هو رسوخ؟
+              <Link className="app-footer__link" to="/guide">
+                <Icon name="book" size={16} />
+                طريقة استخدام رسوخ
               </Link>
             </li>
             <li>
-              {AUTHOR_SITE_URL ? (
-                <a className="app-footer__link" href={AUTHOR_SITE_URL} target="_blank" rel="noopener noreferrer">
-                  <Icon name="heart" size={16} />
-                  ادعيلي دعوة حلوة
-                </a>
-              ) : (
-                <span className="app-footer__link is-pending">
-                  <Icon name="heart" size={16} />
-                  ادعيلي دعوة حلوة
-                  <span className="app-footer__soon">قريبًا</span>
-                </span>
-              )}
+              <Link className="app-footer__link" to="/app">
+                <Icon name="phone" size={16} />
+                تطبيق الجوال
+              </Link>
+            </li>
+            <li>
+              <Link className="app-footer__link" to="/pricing">
+                <Icon name="gem" size={16} />
+                الباقات والأسعار
+              </Link>
+            </li>
+            <li>
+              <Link className="app-footer__link" to="/developer">
+                <Icon name="code" size={16} />
+                مبرمج تطبيق رسوخ
+              </Link>
             </li>
           </ul>
         </nav>

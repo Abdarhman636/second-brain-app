@@ -1,16 +1,30 @@
+import { Link } from 'react-router';
 import { BrandMark, Icon, type IconName } from './Icon';
 
+// The method in three steps, in the order the user lives it.
 const FEATURES: { icon: IconName; title: string; text: string }[] = [
-  { icon: 'projects', title: 'نظّم ما تتعلمه', text: 'من كتاب أو بودكاست أو كورس، في مشاريع وبطاقات قصيرة.' },
-  { icon: 'today', title: 'راجع ما يستحق اليوم فقط', text: 'نختار لك البطاقات المستحقة، وأنت تراجع وتكمل يومك.' },
-  { icon: 'flame', title: 'معرفة تبقى معك', text: 'كل مرة تتذكر فيها بطاقة تتباعد مراجعتها، حتى تصبح راسخة.' },
+  {
+    icon: 'edit',
+    title: 'دوّن ونظّم ما تتعلمه',
+    text: 'من كتاب أو محاضرة أو بودكاست: سؤال وجواب، أو تعريف، أو اقتباس، أو صورة. ورتّبها في رفوف ومشاريع لكل مادة.',
+  },
+  {
+    icon: 'today',
+    title: 'راجعه باستمرار',
+    text: 'كل يوم نجهّز لك ما حان وقت مراجعته فقط، فتكفيك دقائق قليلة.',
+  },
+  {
+    icon: 'flame',
+    title: 'وتترسّخ معك',
+    text: 'كلما تذكّرت بطاقة تباعدت مراجعتها، حتى تصير المعلومة جزءًا ثابتًا منك.',
+  },
 ];
 
 const SCHEDULE = ['اليوم', 'غدًا', 'بعد يومين', 'بعد أسبوع', 'بعد أسبوعين', 'كل شهر'];
 
 /**
- * What Rusookh is, in a few lines. Shown next to sign-in / sign-up and on
- * the About page, so the explanation is the same everywhere.
+ * What Rusookh is, in a few lines, shown next to sign-in / sign-up, with a
+ * clear link to the full guide (/guide).
  */
 export function AppIntro({ headingLevel = 2 }: { headingLevel?: 1 | 2 }) {
   const Heading = headingLevel === 1 ? 'h1' : 'h2';
@@ -22,11 +36,11 @@ export function AppIntro({ headingLevel = 2 }: { headingLevel?: 1 | 2 }) {
       </span>
 
       <Heading className="auth-intro__title" id="auth-intro-title">
-        احفظ ما تتعلمه، ونعيده إليك في الوقت المناسب.
+        معرفةٌ تترسّخ معك
       </Heading>
       <p className="auth-intro__lead">
-        نقرأ ونسمع ونتعلم كل يوم، ثم ننسى معظمه خلال أيام. رسوخ يحفظ المعلومات المهمة في بطاقات صغيرة، ويعيدها
-        إليك على فترات متباعدة حتى تنتقل إلى ذاكرتك طويلة المدى.
+        نتعلم كل يوم، ثم ننسى أكثره خلال أيام. في رسوخ تدوّن ما تتعلمه في بطاقات قصيرة وتنظّمه، ثم نعيده إليك في الوقت المناسب، قبل أن
+        تنساه بقليل، حتى يثبت في ذاكرتك.
       </p>
 
       <ul className="auth-features" role="list">
@@ -53,6 +67,15 @@ export function AppIntro({ headingLevel = 2 }: { headingLevel?: 1 | 2 }) {
           ))}
         </ol>
       </div>
+
+      <Link className="auth-guide-link" to="/guide">
+        <Icon name="book" size={20} />
+        <span>
+          <strong>جديد على رسوخ؟ اقرأ طريقة الاستخدام</strong>
+          <small>دليل خطوة بخطوة: الرفوف، والبطاقات، والمراجعة اليومية.</small>
+        </span>
+        <Icon name="arrowLeft" size={18} />
+      </Link>
     </section>
   );
 }

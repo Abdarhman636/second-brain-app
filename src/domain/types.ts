@@ -2,6 +2,7 @@
  * Core data model. Shared by every layer (and later by the React Native app),
  * and shaped to map directly onto database tables.
  */
+import type { PlanId } from './plans';
 
 /** A calendar day as "YYYY-MM-DD" in the user's local time. Sorts lexically. */
 export type ISODate = string;
@@ -18,6 +19,14 @@ export interface User {
   email: string;
   /** Saved with the account, so it follows the user to other devices. */
   dailyLimit: DailyLimit;
+  /** Asked when signing up; null when the user hasn't answered. */
+  isStudent: boolean | null;
+  /** The plan in effect: a paid plan until it expires, else free. Set on the server only. */
+  plan: PlanId;
+  /** When the paid plan ends; null on the free plan. */
+  planExpiresAt: ISODateTime | null;
+  /** Reviews payments. Set on the server only (Supabase app_metadata). */
+  isAdmin: boolean;
 }
 
 /* ---------- Shelves ---------- */

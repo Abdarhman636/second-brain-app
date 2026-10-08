@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { Link, Navigate, Outlet, useLocation, useNavigate } from 'react-router';
-import { AUTHOR_SITE_URL } from '../config';
 import { retryLoad, signOut as endAccountSession } from '../data/session';
-import { getInitial } from '../domain/format';
+import { formatShortDate, toISODate } from '../domain/date-utils';
+import { formatCount, getInitial } from '../domain/format';
+import { getDaysUntilExpiry, PLANS, RENEWAL_REMINDER_DAYS } from '../domain/plans';
 import { useTodaysReviews } from '../hooks/use-app-data';
 import { useGlobalShortcuts } from '../hooks/use-global-shortcuts';
 import { useToggleTheme } from '../hooks/use-theme';
@@ -10,16 +11,18 @@ import { useToday } from '../hooks/use-today';
 import { useVacationExpiry } from '../hooks/use-vacation-actions';
 import { useAppStore } from '../store/app-store';
 import { useSessionStore } from '../store/session-store';
+import { countResources } from '../store/selectors';
 import { useUiStore } from '../store/ui-store';
 import { Footer } from './Footer';
 import { BrandMark, Icon, type IconName } from './Icon';
 
-type Section = 'today' | 'projects' | 'cards' | 'settings';
+type Section = 'today' | 'projects' | 'cards' | 'pricing' | 'settings' | 'admin';
 
 const NAV_ITEMS: { section: Section; to: string; label: string; icon: IconName }[] = [
   { section: 'today', to: '/', label: 'اليوم', icon: 'today' },
-  { section: 'projects', to: '/projects', label: 'المشاريع', icon: 'projects' },
+  { section: 'projects', to: '/projects', label: 'الرفوف والمشاريع', icon: 'projects' },
   { section: 'cards', to: '/cards', label: 'البطاقات', icon: 'cards' },
+  { section: 'pricing', to: '/pricing', label: 'الباقات والأسعار', icon: 'gem' },
   { section: 'settings', to: '/settings', label: 'الإعدادات', icon: 'settings' },
 ];
 
@@ -31,6 +34,8 @@ function getPageKey(pathname: string): string {
 
 function getSection(page: string): Section | null {
   if (page === 'review') return 'today';
+  if (page === 'checkout') return 'pricing';
+  if (page === 'admin') return 'admin';
   return NAV_ITEMS.find((item) => item.section === page)?.section ?? null;
 }
 
@@ -63,7 +68,10 @@ function SidebarUser({ onNavigate }: { onNavigate: () => void }) {
         {getInitial(user.name)}
       </span>
       <span className="sidebar-user__body">
-        <span className="sidebar-user__name">{user.name}</span>
+        <span className="sidebar-user__name">
+          {user.name}
+          {mode === 'account' && user.plan !== 'free' && <span className="sidebar-user__plan">{PLANS[user.plan].name}</span>}
+        </span>
         {mode === 'demo' ? (
           <span className="sidebar-user__meta">وضع تجريبي · لا يُحفظ شيء</span>
         ) : (
@@ -76,10 +84,76 @@ function SidebarUser({ onNavigate }: { onNavigate: () => void }) {
   );
 }
 
+/** Free accounts: how much of the plan is used, with a way up. */
+function SidebarPlan({ onNavigate }: { onNavigate: () => void }) {
+  const user = useAppStore((state) => state.user);
+  const mode = useAppStore((state) => state.mode);
+  const shelves = useAppStore((state) => state.shelves);
+  const projects = useAppStore((state) => state.projects);
+  const cards = useAppStore((state) => state.cards);
+  if (mode !== 'account' || !user) return null;
+
+  // Paid: the plan and its end date, and a nudge to renew as it comes near.
+  if (user.plan !== 'free') {
+    const daysLeft = user.planExpiresAt ? getDaysUntilExpiry(user.planExpiresAt) : 0;
+    const renewSoon = daysLeft <= RENEWAL_REMINDER_DAYS;
+    return (
+      <Link
+        className={`sidebar-plan sidebar-plan--paid${renewSoon ? ' is-ending' : ''}`}
+        to={renewSoon ? `/checkout?plan=${user.plan}&period=year` : '/settings'}
+        onClick={onNavigate}
+      >
+        <span className="sidebar-plan__head">
+          <span className="sidebar-plan__name">
+            <Icon name="gem" size={14} />
+            خطة {PLANS[user.plan].name}
+          </span>
+          {renewSoon && (
+            <span className="sidebar-plan__upgrade">
+              جدّد
+              <Icon name="arrowLeft" size={14} />
+            </span>
+          )}
+        </span>
+        <span className="sidebar-plan__usage">
+          {renewSoon
+            ? daysLeft === 0
+              ? 'ينتهي اشتراكك اليوم'
+              : `ينتهي اشتراكك خلال ${formatCount(daysLeft, 'days')}`
+            : user.planExpiresAt && `ساري حتى ${formatShortDate(toISODate(new Date(user.planExpiresAt)))}`}
+        </span>
+      </Link>
+    );
+  }
+
+  const { limits, name } = PLANS.free;
+  const counts = countResources({ user, mode, shelves, projects, cards });
+  const cardLimit = limits.cards ?? 0;
+
+  return (
+    <Link className="sidebar-plan" to="/pricing" onClick={onNavigate}>
+      <span className="sidebar-plan__head">
+        <span className="sidebar-plan__name">خطة {name}</span>
+        <span className="sidebar-plan__upgrade">
+          ترقية
+          <Icon name="arrowLeft" size={14} />
+        </span>
+      </span>
+      <span className="sidebar-plan__bar" aria-hidden="true">
+        <span style={{ width: `${Math.min(100, (counts.cards / cardLimit) * 100)}%` }} />
+      </span>
+      <span className="sidebar-plan__usage">
+        {counts.cards}/{cardLimit} بطاقة · {counts.projects}/{limits.projects} مشروع · {counts.shelves}/{limits.shelves} رف
+      </span>
+    </Link>
+  );
+}
+
 function Sidebar({ section, id, onNavigate }: { section: Section | null; id: string; onNavigate: () => void }) {
   const today = useToday();
   const dueCount = useTodaysReviews(today).cards.length;
   const mode = useAppStore((state) => state.mode);
+  const isAdmin = useAppStore((state) => state.user?.isAdmin ?? false);
   const openDialog = useUiStore((state) => state.openDialog);
   const navigate = useNavigate();
 
@@ -137,30 +211,43 @@ function Sidebar({ section, id, onNavigate }: { section: Section | null; id: str
               </Link>
             </li>
           ))}
+          {isAdmin && (
+            <li>
+              <Link
+                className="sidebar-nav__link"
+                to="/admin/payments"
+                aria-current={section === 'admin' ? 'page' : undefined}
+                onClick={onNavigate}
+              >
+                <Icon name="check" size={18} />
+                <span className="sidebar-nav__label">طلبات الاشتراك</span>
+              </Link>
+            </li>
+          )}
         </ul>
       </nav>
+
+      <SidebarPlan onNavigate={onNavigate} />
 
       <footer className="sidebar__footer">
         <ul className="sidebar__links" role="list">
           <li>
-            <Link className="sidebar__link" to="/about" onClick={onNavigate}>
-              <Icon name="info" size={16} />
-              ما هو رسوخ؟
+            <Link className="sidebar__link" to="/app" onClick={onNavigate}>
+              <Icon name="phone" size={16} />
+              تطبيق الجوال
             </Link>
           </li>
           <li>
-            {AUTHOR_SITE_URL ? (
-              <a className="sidebar__link" href={AUTHOR_SITE_URL} target="_blank" rel="noopener noreferrer">
-                <Icon name="heart" size={16} />
-                ادعيلي دعوة حلوة
-              </a>
-            ) : (
-              <span className="sidebar__link is-pending">
-                <Icon name="heart" size={16} />
-                ادعيلي دعوة حلوة
-                <span className="app-footer__soon">قريبًا</span>
-              </span>
-            )}
+            <Link className="sidebar__link" to="/guide" onClick={onNavigate}>
+              <Icon name="book" size={16} />
+              طريقة استخدام رسوخ
+            </Link>
+          </li>
+          <li>
+            <Link className="sidebar__link" to="/developer" onClick={onNavigate}>
+              <Icon name="code" size={16} />
+              مبرمج تطبيق رسوخ
+            </Link>
           </li>
           <li>
             <button type="button" className="sidebar__link sidebar__link--quiet" onClick={() => void signOut()}>
@@ -317,8 +404,11 @@ export function RequireAuth({ children }: { children: ReactNode }) {
   const user = useAppStore((state) => state.user);
   const phase = useSessionStore((state) => state.phase);
   const error = useSessionStore((state) => state.error);
+  const passwordRecovery = useSessionStore((state) => state.passwordRecovery);
   const location = useLocation();
 
+  // Signed in by a password-reset link: choosing the new password comes first.
+  if (user && passwordRecovery) return <Navigate to="/reset-password" replace />;
   if (user) return children;
   if (phase === 'starting' || phase === 'loading') return <SessionLoading />;
   if (phase === 'error') return <SessionError message={error ?? 'تعذّر تحميل بياناتك.'} />;
@@ -329,8 +419,10 @@ export function RequireAuth({ children }: { children: ReactNode }) {
 export function PublicOnly({ children }: { children: ReactNode }) {
   const user = useAppStore((state) => state.user);
   const phase = useSessionStore((state) => state.phase);
+  const passwordRecovery = useSessionStore((state) => state.passwordRecovery);
   const location = useLocation();
 
+  if (user && passwordRecovery) return <Navigate to="/reset-password" replace />;
   if (user) {
     const from = (location.state as { from?: string } | null)?.from;
     return <Navigate to={from ?? '/'} replace />;

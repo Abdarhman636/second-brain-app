@@ -36,6 +36,71 @@ const PATHS = {
       <path d="m8 12.5 2.5 2.5 4-5" />
     </>
   ),
+  gem: (
+    <>
+      <path d="M6 3h12l4 6-10 12L2 9z" />
+      <path d="M2 9h20M12 21 8 9l4-6 4 6z" />
+    </>
+  ),
+  sparkle: <path d="M12 3c.6 4.2 2.8 6.4 7 7-4.2.6-6.4 2.8-7 7-.6-4.2-2.8-6.4-7-7 4.2-.6 6.4-2.8 7-7zM19 16c.2 1.5.9 2.2 2.4 2.4-1.5.2-2.2.9-2.4 2.4-.2-1.5-.9-2.2-2.4-2.4 1.5-.2 2.2-.9 2.4-2.4z" />,
+  mic: (
+    <>
+      <rect x="9" y="3" width="6" height="11" rx="3" />
+      <path d="M5 11a7 7 0 0 0 14 0M12 18v3" />
+    </>
+  ),
+  text: <path d="M4 6h16M4 12h16M4 18h10" />,
+  copy: (
+    <>
+      <rect x="9" y="9" width="12" height="12" rx="1" />
+      <path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1" />
+    </>
+  ),
+  share: (
+    <>
+      <path d="M12 3v12M8 7l4-4 4 4" />
+      <path d="M6 11H5v10h14V11h-1" />
+    </>
+  ),
+  moreVertical: (
+    <>
+      <circle cx="12" cy="5" r="1.4" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="19" r="1.4" fill="currentColor" stroke="none" />
+    </>
+  ),
+  phone: (
+    <>
+      <rect x="6" y="2.5" width="12" height="19" rx="2" />
+      <path d="M11 18.5h2" />
+    </>
+  ),
+  addSquare: (
+    <>
+      <rect x="3.5" y="3.5" width="17" height="17" rx="3" />
+      <path d="M12 8v8M8 12h8" />
+    </>
+  ),
+  book: (
+    <>
+      <path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z" />
+      <path d="M4 19V5M8 7h7M8 11h5" />
+    </>
+  ),
+  code: <path d="m8 7-5 5 5 5M16 7l5 5-5 5M14 4l-4 16" />,
+  linkedin: (
+    <>
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <path d="M8 10v7M8 7v.01M12 17v-4a2 2 0 0 1 4 0v4M12 10v7" />
+    </>
+  ),
+  instagram: (
+    <>
+      <rect x="3" y="3" width="18" height="18" rx="5" />
+      <circle cx="12" cy="12" r="4" />
+      <path d="M17.5 6.5v.01" />
+    </>
+  ),
   plus: <path d="M12 5v14M5 12h14" />,
   close: <path d="M18 6 6 18M6 6l12 12" />,
   check: <path d="M20 6 9 17l-5-5" />,

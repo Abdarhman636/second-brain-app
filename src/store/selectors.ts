@@ -2,9 +2,10 @@
  * Derived data. Pure functions over store slices — components call them
  * inside `useMemo`, and the store's actions reuse them.
  */
+import { isAtLimit, type LimitedResource, type ResourceCounts } from '../domain/plans';
 import { getCardsDueToday, isCardDue } from '../domain/review-scheduler';
 import type { Card, ISODate, ReviewLogEntry } from '../domain/types';
-import type { ReviewSession } from './app-store';
+import type { AppStore, ReviewSession } from './app-store';
 
 export interface ReviewSummary {
   reviewed: number;
@@ -56,3 +57,21 @@ export function getCurrentReviewItem(session: ReviewSession, cards: readonly Car
 }
 
 export { getCardsDueToday as getDueCards };
+
+/* ---------- Plan limits ---------- */
+
+type PlanState = Pick<AppStore, 'user' | 'mode' | 'shelves' | 'projects' | 'cards'>;
+
+/** Everything counts, archived projects and their cards included, so archiving can't get around a limit. */
+export function countResources(state: PlanState): ResourceCounts {
+  return { shelves: state.shelves.length, projects: state.projects.length, cards: state.cards.length };
+}
+
+/**
+ * True when the user's plan doesn't allow one more of `resource`. Only
+ * accounts have limits: demo mode lets visitors try everything.
+ */
+export function isPlanLimitReached(state: PlanState, resource: LimitedResource): boolean {
+  if (state.mode !== 'account' || !state.user) return false;
+  return isAtLimit(state.user.plan, resource, countResources(state));
+}

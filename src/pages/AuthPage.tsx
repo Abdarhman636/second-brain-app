@@ -2,19 +2,21 @@
  * Sign in / create account, next to a short introduction to the app for
  * people who are new to it.
  */
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { Link, useLocation } from 'react-router';
 import { ThemeToggle } from '../components/AppLayout';
 import { AppIntro } from '../components/AppIntro';
 import { Icon } from '../components/Icon';
 import { PASSWORD_MIN_LENGTH, resendConfirmation, signIn, signUp, startDemo } from '../data/session';
 import { isBackendConfigured } from '../data/supabase/client';
+import { ACADEMIC_EMAIL_EXAMPLE, isAcademicEmail } from '../domain/students';
 import { useDocumentTitle } from '../hooks/use-document-title';
 
 type Mode = 'login' | 'signup';
 type Field = 'name' | 'email' | 'password';
+type ErrorKey = Field | 'student';
 
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+export const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const COPY = {
   login: {
@@ -37,8 +39,8 @@ const COPY = {
   },
 } as const;
 
-function validate(mode: Mode, values: Record<Field, string>): Partial<Record<Field, string>> {
-  const errors: Partial<Record<Field, string>> = {};
+function validate(mode: Mode, values: Record<Field, string>, isStudent: boolean | null): Partial<Record<ErrorKey, string>> {
+  const errors: Partial<Record<ErrorKey, string>> = {};
   if (mode === 'signup' && !values.name) errors.name = 'اكتب اسمك';
   if (!values.email) errors.email = 'اكتب بريدك الإلكتروني';
   else if (!EMAIL_PATTERN.test(values.email)) errors.email = 'تأكد من صيغة البريد الإلكتروني';
@@ -46,10 +48,26 @@ function validate(mode: Mode, values: Record<Field, string>): Partial<Record<Fie
   else if (mode === 'signup' && values.password.length < PASSWORD_MIN_LENGTH) {
     errors.password = `كلمة المرور يجب أن تكون ${PASSWORD_MIN_LENGTH} أحرف على الأقل`;
   }
+  if (mode === 'signup' && isStudent === null) errors.student = 'اختر إجابة';
   return errors;
 }
 
-function PasswordInput(props: { id: string; value: string; autoComplete: string; describedBy: string; invalid: boolean; onChange: (value: string) => void }) {
+/** The sign-in pages' frame: the introduction beside a panel. */
+export function AuthShell({ labelledBy, children }: { labelledBy: string; children: ReactNode }) {
+  return (
+    <div className="auth-page">
+      <ThemeToggle className="auth-theme-toggle" />
+      <div className="auth-layout">
+        <AppIntro />
+        <section className="auth-panel" aria-labelledby={labelledBy}>
+          {children}
+        </section>
+      </div>
+    </div>
+  );
+}
+
+export function PasswordInput(props: { id: string; value: string; autoComplete: string; describedBy: string; invalid: boolean; onChange: (value: string) => void }) {
   const [visible, setVisible] = useState(false);
   return (
     <div className="password-field">
@@ -85,7 +103,8 @@ export function AuthPage({ mode }: { mode: Mode }) {
   const location = useLocation();
 
   const [values, setValues] = useState<Record<Field, string>>({ name: '', email: '', password: '' });
-  const [errors, setErrors] = useState<Partial<Record<Field, string>>>({});
+  const [isStudent, setIsStudent] = useState<boolean | null>(null);
+  const [errors, setErrors] = useState<Partial<Record<ErrorKey, string>>>({});
   const [formError, setFormError] = useState('');
   const [busy, setBusy] = useState(false);
   /** Set after sign-up (or a sign-in attempt) while the email is still unconfirmed. */
@@ -109,18 +128,20 @@ export function AuthPage({ mode }: { mode: Mode }) {
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const trimmed = { name: values.name.trim(), email: values.email.trim(), password: values.password };
-    const nextErrors = validate(mode, trimmed);
+    const nextErrors = validate(mode, trimmed, isStudent);
     setErrors(nextErrors);
 
-    const firstInvalid = (['name', 'email', 'password'] as const).find((field) => nextErrors[field]);
+    const firstInvalid = (['name', 'student', 'email', 'password'] as const).find((field) => nextErrors[field]);
     if (firstInvalid) {
-      document.getElementById(`auth-${firstInvalid}`)?.focus();
+      document.getElementById(firstInvalid === 'student' ? 'auth-student-yes' : `auth-${firstInvalid}`)?.focus();
       return;
     }
 
     setBusy(true);
     setPendingEmail(null);
-    const outcome = isSignup ? await signUp(trimmed.name, trimmed.email, trimmed.password) : await signIn(trimmed.email, trimmed.password);
+    const outcome = isSignup
+      ? await signUp(trimmed.name, trimmed.email, trimmed.password, isStudent === true)
+      : await signIn(trimmed.email, trimmed.password);
 
     if (outcome.needsConfirmation) {
       setBusy(false);
@@ -160,132 +181,178 @@ export function AuthPage({ mode }: { mode: Mode }) {
   );
 
   return (
-    <div className="auth-page">
-      <ThemeToggle className="auth-theme-toggle" />
-      <div className="auth-layout">
-        <AppIntro />
-
-        <section className="auth-panel" aria-labelledby="auth-title">
-          {pendingEmail?.justSignedUp ? (
-            <div className="auth-confirm" role="status">
-              <span className="auth-confirm__icon">
-                <Icon name="check" size={22} />
-              </span>
-              <h1 className="auth-panel__title" id="auth-title">
-                تحقق من بريدك
-              </h1>
-              <p className="auth-panel__subtitle">
-                أرسلنا رابط تأكيد إلى <span dir="ltr">{pendingEmail.email}</span>. افتحه لتفعيل حسابك، وسندخلك مباشرة.
-              </p>
-              <div className="auth-confirm__actions">
-                <button type="button" className="btn btn--secondary" onClick={resend}>
-                  أعد إرسال الرسالة
-                </button>
-                <button type="button" className="btn btn--ghost" onClick={() => setPendingEmail(null)}>
-                  تعديل البريد
-                </button>
-              </div>
-              {resendNote && <p className="auth-confirm__note">{resendNote}</p>}
-            </div>
-          ) : (
-            <>
-              <h1 className="auth-panel__title" id="auth-title">
-                {copy.title}
-              </h1>
-              <p className="auth-panel__subtitle">{copy.subtitle}</p>
-
-              <form ref={formRef} className="form auth-form" noValidate onSubmit={handleSubmit}>
-                {formError && (
-                  <div className="auth-form__error" role="alert">
-                    <p>{formError}</p>
-                    {pendingEmail && (
-                      <button type="button" className="auth-form__error-action" onClick={resend}>
-                        أعد إرسال رسالة التأكيد
-                      </button>
-                    )}
-                    {resendNote && <p className="auth-form__error-note">{resendNote}</p>}
-                  </div>
-                )}
-
-                {isSignup && (
-                  <div className="field">
-                    <label className="field__label" htmlFor="auth-name">
-                      الاسم
-                    </label>
-                    <input
-                      className="input"
-                      type="text"
-                      autoComplete="name"
-                      placeholder="كيف نناديك؟"
-                      value={values.name}
-                      onChange={(event) => update('name', event.target.value)}
-                      {...fieldProps('name')}
-                    />
-                    {fieldError('name')}
-                  </div>
-                )}
-
-                <div className="field">
-                  <label className="field__label" htmlFor="auth-email">
-                    البريد الإلكتروني
-                  </label>
-                  <input
-                    className="input"
-                    type="email"
-                    dir="ltr"
-                    autoComplete="email"
-                    placeholder="name@example.com"
-                    value={values.email}
-                    onChange={(event) => update('email', event.target.value)}
-                    {...fieldProps('email')}
-                  />
-                  {fieldError('email')}
-                </div>
-
-                <div className="field">
-                  <label className="field__label" htmlFor="auth-password">
-                    كلمة المرور
-                  </label>
-                  <PasswordInput
-                    id="auth-password"
-                    value={values.password}
-                    autoComplete={isSignup ? 'new-password' : 'current-password'}
-                    describedBy={fieldProps('password')['aria-describedby']}
-                    invalid={Boolean(errors.password)}
-                    onChange={(value) => update('password', value)}
-                  />
-                  {isSignup && (
-                    <p className="field__hint" id="auth-password-hint">
-                      {PASSWORD_MIN_LENGTH} أحرف على الأقل.
-                    </p>
-                  )}
-                  {fieldError('password')}
-                </div>
-
-                <button type="submit" className="btn btn--primary btn--lg btn--block" disabled={busy} aria-busy={busy}>
-                  {copy.submitLabel}
-                </button>
-              </form>
-
-              <p className="auth-panel__switch">
-                {copy.switchText} <Link to={copy.switchTo} state={location.state}>{copy.switchLabel}</Link>
-              </p>
-            </>
-          )}
-
-          <div className="auth-demo">
-            <span className="auth-demo__divider">أو</span>
-            <button type="button" className="btn btn--secondary btn--block" disabled={busy} aria-busy={busy} onClick={tryDemo}>
-              جرّب التطبيق بدون حساب
+    <AuthShell labelledBy="auth-title">
+      {pendingEmail?.justSignedUp ? (
+        <div className="auth-confirm" role="status">
+          <span className="auth-confirm__icon">
+            <Icon name="check" size={22} />
+          </span>
+          <h1 className="auth-panel__title" id="auth-title">
+            تحقق من بريدك
+          </h1>
+          <p className="auth-panel__subtitle">
+            أرسلنا رابط تأكيد إلى <span dir="ltr">{pendingEmail.email}</span>. افتحه لتفعيل حسابك، وسندخلك مباشرة.
+          </p>
+          <div className="auth-confirm__actions">
+            <button type="button" className="btn btn--secondary" onClick={resend}>
+              أعد إرسال الرسالة
             </button>
-            <p className="auth-demo__note">
-              {isBackendConfigured
-                ? 'مشاريع وبطاقات تجريبية جاهزة، ولا يُحفظ فيها شيء.'
-                : 'الحسابات غير مفعّلة في هذه النسخة؛ جرّب التطبيق ببيانات تجريبية.'}
-            </p>
+            <button type="button" className="btn btn--ghost" onClick={() => setPendingEmail(null)}>
+              تعديل البريد
+            </button>
           </div>
-        </section>
+          {resendNote && <p className="auth-confirm__note">{resendNote}</p>}
+        </div>
+      ) : (
+        <>
+          <h1 className="auth-panel__title" id="auth-title">
+            {copy.title}
+          </h1>
+          <p className="auth-panel__subtitle">{copy.subtitle}</p>
+
+          <form ref={formRef} className="form auth-form" noValidate onSubmit={handleSubmit}>
+            {formError && (
+              <div className="auth-form__error" role="alert">
+                <p>{formError}</p>
+                {pendingEmail && (
+                  <button type="button" className="auth-form__error-action" onClick={resend}>
+                    أعد إرسال رسالة التأكيد
+                  </button>
+                )}
+                {resendNote && <p className="auth-form__error-note">{resendNote}</p>}
+              </div>
+            )}
+
+            {isSignup && (
+              <div className="field">
+                <label className="field__label" htmlFor="auth-name">
+                  الاسم
+                </label>
+                <input
+                  className="input"
+                  type="text"
+                  autoComplete="name"
+                  placeholder="كيف نناديك؟"
+                  value={values.name}
+                  onChange={(event) => update('name', event.target.value)}
+                  {...fieldProps('name')}
+                />
+                {fieldError('name')}
+              </div>
+            )}
+
+            {isSignup && (
+              <fieldset className="field" aria-describedby="auth-student-error">
+                <legend className="field__label">هل أنت طالب؟</legend>
+                <div className="auth-choices">
+                  {[
+                    { value: true, id: 'auth-student-yes', label: 'نعم، طالب' },
+                    { value: false, id: 'auth-student-no', label: 'لا' },
+                  ].map((option) => (
+                    <label key={option.id} className="type-option">
+                      <input
+                        className="type-option__input"
+                        id={option.id}
+                        type="radio"
+                        name="auth-student"
+                        checked={isStudent === option.value}
+                        aria-invalid={Boolean(errors.student)}
+                        onChange={() => {
+                          setIsStudent(option.value);
+                          setErrors((current) => ({ ...current, student: undefined }));
+                        }}
+                      />
+                      <span className="type-option__label">{option.label}</span>
+                    </label>
+                  ))}
+                </div>
+                <p className="field__error" id="auth-student-error" hidden={!errors.student}>
+                  {errors.student}
+                </p>
+                {isStudent && (
+                  <p className="auth-student-hint">
+                    <Icon name="gem" size={16} />
+                    <span>
+                      للحصول على <strong>خصم الطلاب</strong>، سجّل بإيميل جامعتك (مثل <span dir="ltr">{ACADEMIC_EMAIL_EXAMPLE}</span>).
+                    </span>
+                  </p>
+                )}
+              </fieldset>
+            )}
+
+            <div className="field">
+              <label className="field__label" htmlFor="auth-email">
+                البريد الإلكتروني
+              </label>
+              <input
+                className="input"
+                type="email"
+                dir="ltr"
+                autoComplete="email"
+                placeholder="name@example.com"
+                value={values.email}
+                onChange={(event) => update('email', event.target.value)}
+                {...fieldProps('email')}
+              />
+              {fieldError('email')}
+              {isSignup && isStudent && values.email.includes('@') && !errors.email && (
+                <p className={`auth-email-check${isAcademicEmail(values.email) ? ' is-academic' : ''}`} aria-live="polite">
+                  {isAcademicEmail(values.email)
+                    ? '✓ إيميل جامعي: ستحصل على سعر الطالب.'
+                    : 'هذا ليس إيميلًا جامعيًا. يمكنك المتابعة، لكن بلا خصم الطلاب.'}
+                </p>
+              )}
+            </div>
+
+            <div className="field">
+              <div className="field__label-row">
+                <label className="field__label" htmlFor="auth-password">
+                  كلمة المرور
+                </label>
+                {!isSignup && (
+                  <Link className="field__label-link" to="/forgot-password" state={{ ...(location.state as object | null), email: values.email.trim() }}>
+                    نسيت كلمة المرور؟
+                  </Link>
+                )}
+              </div>
+              <PasswordInput
+                id="auth-password"
+                value={values.password}
+                autoComplete={isSignup ? 'new-password' : 'current-password'}
+                describedBy={fieldProps('password')['aria-describedby']}
+                invalid={Boolean(errors.password)}
+                onChange={(value) => update('password', value)}
+              />
+              {isSignup && (
+                <p className="field__hint" id="auth-password-hint">
+                  {PASSWORD_MIN_LENGTH} أحرف على الأقل.
+                </p>
+              )}
+              {fieldError('password')}
+            </div>
+
+            <button type="submit" className="btn btn--primary btn--lg btn--block" disabled={busy} aria-busy={busy}>
+              {copy.submitLabel}
+            </button>
+          </form>
+
+          <p className="auth-panel__switch">
+            {copy.switchText} <Link to={copy.switchTo} state={location.state}>{copy.switchLabel}</Link>
+          </p>
+        </>
+      )}
+
+      <div className="auth-demo">
+        <span className="auth-demo__divider">أو</span>
+        <button type="button" className="btn btn--secondary btn--block" disabled={busy} aria-busy={busy} onClick={tryDemo}>
+          جرّب التطبيق بدون حساب
+        </button>
+        <p className="auth-demo__note">
+          {isBackendConfigured
+            ? 'مشاريع وبطاقات تجريبية جاهزة، ولا يُحفظ فيها شيء.'
+            : 'الحسابات غير مفعّلة في هذه النسخة؛ جرّب التطبيق ببيانات تجريبية.'}
+        </p>
       </div>
-    </div>
+    </AuthShell>
   );
 }

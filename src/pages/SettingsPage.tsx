@@ -3,13 +3,15 @@
  * Each section is a row: what it is on one side, its controls on the other.
  */
 import { useState, type FormEvent, type ReactNode } from 'react';
-import { useNavigate } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import { Icon } from '../components/Icon';
-import { signOut, updateDailyLimit, updateName } from '../data/session';
-import { formatLongDate, formatRelativeDate } from '../domain/date-utils';
+import { requestEmailChange, signOut, updateDailyLimit, updateIsStudent, updateName } from '../data/session';
+import { formatLongDate, formatRelativeDate, formatShortDate, toISODate } from '../domain/date-utils';
 import { formatCount, getInitial } from '../domain/format';
 import { CARDS_PER_MINUTE, DAILY_LIMIT_OPTIONS, DEFAULT_DAILY_LIMIT } from '../domain/review-scheduler';
 import type { DailyLimit } from '../domain/types';
+import { getDaysUntilExpiry, PLANS, RESOURCE_LABELS } from '../domain/plans';
+import { ACADEMIC_EMAIL_EXAMPLE, isAcademicEmail, isStudentDiscountEligible } from '../domain/students';
 import { getActiveVacation, getVacationDaysLeft, MAX_VACATION_DAYS } from '../domain/vacation';
 import { useDocumentTitle } from '../hooks/use-document-title';
 import { useToday } from '../hooks/use-today';
@@ -103,6 +105,32 @@ function AccountSection() {
         </p>
       </form>
 
+      <fieldset className="settings-inline-form">
+        <legend className="field__label">هل أنت طالب؟</legend>
+        <div className="auth-choices">
+          {[
+            { value: true, label: 'نعم، طالب' },
+            { value: false, label: 'لا' },
+          ].map((option) => (
+            <label key={option.label} className="type-option">
+              <input
+                className="type-option__input"
+                type="radio"
+                name="settings-student"
+                checked={user.isStudent === option.value}
+                onChange={async () => {
+                  const result = await updateIsStudent(option.value);
+                  showToast(result.error ?? 'حُفظت إجابتك', result.error ? 'error' : 'success');
+                }}
+              />
+              <span className="type-option__label">{option.label}</span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
+
+      <StudentDiscount />
+
       <button
         type="button"
         className="btn btn--secondary settings-signout"
@@ -115,6 +143,130 @@ function AccountSection() {
         {mode === 'demo' ? 'الخروج من الوضع التجريبي' : 'تسجيل الخروج'}
       </button>
     </SettingsSection>
+  );
+}
+
+function PlanSection() {
+  const user = useAppStore((state) => state.user);
+  const mode = useAppStore((state) => state.mode);
+  if (!user) return null;
+  const plan = PLANS[user.plan];
+  const { shelves, projects, cards } = plan.limits;
+
+  return (
+    <SettingsSection id="settings-plan" title="خطتك" description="ما تتيحه خطتك الحالية، وكيف ترتقي.">
+      <div className="settings-status">
+        <span className="settings-status__dot is-on" aria-hidden="true" />
+        <p>
+          <strong>{plan.name}</strong>
+          {mode === 'demo'
+            ? ' · الوضع التجريبي بلا حدود لتجرّب كل شيء'
+            : shelves === null || projects === null || cards === null
+              ? ' · رفوف ومشاريع وبطاقات بلا حدود'
+              : ` · ${RESOURCE_LABELS.shelves.limitText(shelves)}، ${RESOURCE_LABELS.projects.limitText(projects)}، ${RESOURCE_LABELS.cards.limitText(cards)}`}
+        </p>
+      </div>
+      {user.planExpiresAt && user.plan !== 'free' && (
+        <p className="settings-hint">
+          ساري حتى {formatShortDate(toISODate(new Date(user.planExpiresAt)))} · يتبقى {formatCount(getDaysUntilExpiry(user.planExpiresAt), 'dayCount')}. لا يتجدد
+          تلقائيًا.
+        </p>
+      )}
+      <div className="settings-actions">
+        {user.plan !== 'free' ? (
+          <Link className="btn btn--primary" to={`/checkout?plan=${user.plan}&period=year`}>
+            جدّد اشتراكك
+          </Link>
+        ) : (
+          mode === 'account' && (
+            <Link className="btn btn--primary" to="/checkout">
+              اشترك أو تابع طلبك
+            </Link>
+          )
+        )}
+        <Link className="btn btn--secondary" to="/pricing">
+          <Icon name="gem" size={16} />
+          الباقات والأسعار
+        </Link>
+      </div>
+    </SettingsSection>
+  );
+}
+
+/** Student price: on with a university email; otherwise, a way to switch to one. */
+function StudentDiscount() {
+  const user = useAppStore((state) => state.user);
+  const mode = useAppStore((state) => state.mode);
+  const showToast = useUiStore((state) => state.showToast);
+  const [email, setEmail] = useState('');
+  const [error, setError] = useState('');
+  const [sentTo, setSentTo] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  if (!user || mode !== 'account' || !user.isStudent) return null;
+
+  if (isStudentDiscountEligible(user)) {
+    return (
+      <p className="settings-student is-active">
+        <Icon name="gem" size={16} />
+        خصم الطلاب مفعّل لحسابك (إيميل جامعي).
+      </p>
+    );
+  }
+
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const trimmed = email.trim();
+    if (!isAcademicEmail(trimmed)) return setError(`اكتب إيميل جامعتك، مثل ${ACADEMIC_EMAIL_EXAMPLE}`);
+    setBusy(true);
+    const result = await requestEmailChange(trimmed);
+    setBusy(false);
+    if (result.error) return setError(result.error);
+    setSentTo(trimmed);
+    showToast('أرسلنا رابط تأكيد إلى إيميل الجامعة');
+  };
+
+  if (sentTo) {
+    return (
+      <p className="settings-student" role="status">
+        <Icon name="check" size={16} />
+        <span>
+          أرسلنا رابط تأكيد إلى <span dir="ltr">{sentTo}</span>. افتحه لتأكيد التغيير، وقد يُطلب منك تأكيده من إيميلك الحالي أيضًا. بعدها
+          يظهر لك سعر الطالب.
+        </span>
+      </p>
+    );
+  }
+
+  return (
+    <form className="settings-inline-form" noValidate onSubmit={submit}>
+      <label className="field__label" htmlFor="settings-academic-email">
+        خصم الطلاب: انقل حسابك إلى إيميل جامعتك
+      </label>
+      <div className="settings-inline-form__row">
+        <input
+          className="input"
+          id="settings-academic-email"
+          type="email"
+          dir="ltr"
+          autoComplete="email"
+          placeholder={ACADEMIC_EMAIL_EXAMPLE}
+          value={email}
+          aria-invalid={Boolean(error)}
+          aria-describedby="settings-academic-email-error"
+          onChange={(event) => {
+            setEmail(event.target.value);
+            setError('');
+          }}
+        />
+        <button type="submit" className="btn btn--dark" disabled={busy || !email.trim()} aria-busy={busy}>
+          تأكيد
+        </button>
+      </div>
+      <p className="field__error" id="settings-academic-email-error" hidden={!error}>
+        {error}
+      </p>
+      <p className="settings-hint">ستسجّل الدخول بعدها بإيميل الجامعة، وتبقى كل بياناتك كما هي.</p>
+    </form>
   );
 }
 
@@ -319,6 +471,7 @@ export function SettingsPage() {
 
       <div className="settings">
         <AccountSection />
+        <PlanSection />
         <AppearanceSection />
         <DailyLimitSection />
         <VacationSection />

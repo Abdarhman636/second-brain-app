@@ -14,7 +14,7 @@ export function Modal({
 }: {
   title: string;
   onClose: () => void;
-  variant?: 'compact';
+  variant?: 'compact' | 'wide';
   children: ReactNode;
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);

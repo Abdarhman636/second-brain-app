@@ -38,8 +38,12 @@
   rx: 3;
 }
 
-.brand__mark path {
+/* The brain's lines are thin at 30px: a stroke in the same color thickens them. */
+.brand__glyph path {
+  fill: var(--color-on-brand);
   stroke: var(--color-on-brand);
+  stroke-width: 0.6;
+  stroke-linejoin: round;
 }
 
 /* ==========================================================================

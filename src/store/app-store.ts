@@ -21,6 +21,7 @@ import {
   isCardDue,
 } from '../domain/review-scheduler';
 import { removeShelfFromProjects } from '../domain/shelves';
+import type { ShareSnapshot } from '../domain/sharing';
 import { shouldCompleteDay } from '../domain/streak';
 import type {
   Card,
@@ -77,6 +78,9 @@ interface AppActions {
   editCard: (cardId: string, input: CardInput) => void;
   moveCard: (cardId: string, projectId: string) => void;
   deleteCard: (cardId: string) => void;
+
+  /** Copy a shared project or shelf into the account, as new items due from today. */
+  importSnapshot: (snapshot: ShareSnapshot, today: ISODate) => { shelf: Shelf | null; projects: Project[] };
 
   /** Turn vacation mode on, starting today. */
   startVacation: (today: ISODate) => void;
@@ -318,6 +322,53 @@ export const useAppStore = create<AppStore>()((set, get) => ({
       reviewSession: withoutQueuedCards(state.reviewSession, new Set([cardId])),
     }));
     persist((repo) => repo.deleteCard(card));
+  },
+
+  /* ---------- Copying a share ---------- */
+
+  importSnapshot: (snapshot, today) => {
+    const base = Date.now();
+    // Spaced a millisecond apart, so the copy keeps the shared order.
+    const stamp = (offset: number) => new Date(base + offset).toISOString();
+    const shelf: Shelf | null =
+      snapshot.kind === 'shelf' && snapshot.shelfName
+        ? { id: crypto.randomUUID(), name: snapshot.shelfName, createdAt: stamp(0), updatedAt: stamp(0) }
+        : null;
+    let offset = 0;
+    const projects: Project[] = [];
+    const cards: Card[] = [];
+    for (const shared of snapshot.projects) {
+      const project: Project = {
+        id: crypto.randomUUID(),
+        name: shared.name,
+        type: shared.type,
+        customTypeLabel: shared.customTypeLabel,
+        color: shared.color,
+        shelfId: shelf?.id ?? null,
+        archived: false,
+        createdAt: stamp(++offset),
+        updatedAt: stamp(offset),
+      };
+      projects.push(project);
+      for (const body of shared.cards) {
+        const timestamp = stamp(++offset);
+        cards.push({ ...body, ...createInitialSchedule(today), id: crypto.randomUUID(), projectId: project.id, createdAt: timestamp, updatedAt: timestamp } as Card);
+      }
+    }
+
+    set((state) => ({
+      shelves: shelf ? [...state.shelves, shelf] : state.shelves,
+      projects: [...projects, ...state.projects],
+      cards: [...state.cards, ...cards],
+    }));
+    // In order: the shelf, then its projects, then their cards (the queue runs one write at a time).
+    if (shelf) persist((repo) => repo.saveShelf(shelf));
+    for (const project of projects) persist((repo) => repo.saveProject(project));
+    for (let start = 0; start < cards.length; start += 500) {
+      const batch = cards.slice(start, start + 500);
+      persist((repo) => repo.saveCards(batch));
+    }
+    return { shelf, projects };
   },
 
   /* ---------- Vacation ---------- */

@@ -205,7 +205,7 @@
   text-decoration: underline;
 }
 
-/* Step 4: receipt */
+/* File picker (used by the AI cards dialog) */
 .receipt-picker {
   position: relative;
   display: flex;
@@ -228,7 +228,7 @@
 .receipt-picker.has-file {
   color: var(--color-text);
   border-style: solid;
-  border-color: var(--color-brand);
+  border-color: var(--color-border-strong);
 }
 
 .receipt-picker input {
@@ -402,136 +402,6 @@
   gap: var(--space-2);
 }
 
-/* ==========================================================================
-   Admin: payment requests
-   ========================================================================== */
-
-.admin-requests {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  border-top: 1px solid var(--color-border);
-  border-inline-start: 1px solid var(--color-border);
-}
-
-.admin-request {
-  display: grid;
-  grid-template-columns: 140px minmax(0, 1fr);
-  gap: var(--space-4);
-  padding: var(--space-4);
-  background: var(--color-surface);
-  border-inline-end: 1px solid var(--color-border);
-  border-bottom: 1px solid var(--color-border);
-}
-
-.admin-receipt {
-  display: grid;
-  place-items: center;
-  aspect-ratio: 3 / 4;
-  overflow: hidden;
-  font-size: var(--text-xs);
-  color: var(--color-text-muted);
-  text-align: center;
-  background: var(--color-field);
-  border: 1px solid var(--color-border);
-}
-
-.admin-receipt img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: top;
-}
-
-.admin-receipt--file {
-  gap: var(--space-2);
-  padding: var(--space-2);
-}
-
-.admin-request__body {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  min-width: 0;
-}
-
-.admin-request__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-}
-
-.admin-request__reference {
-  font-family: var(--font-mono);
-  font-weight: var(--weight-semibold);
-}
-
-.admin-request__status {
-  padding: 1px var(--space-2);
-  font-size: var(--text-2xs);
-  border: 1px solid var(--color-border-strong);
-}
-
-.admin-request__status.is-pending {
-  color: var(--color-on-brand);
-  background: var(--color-brand);
-  border-color: var(--color-brand);
-}
-
-.admin-request__status.is-rejected {
-  color: var(--color-danger);
-  border-color: var(--color-danger);
-}
-
-.admin-request__amount {
-  font-family: var(--font-mono);
-  font-size: var(--text-xl);
-  font-weight: var(--weight-semibold);
-}
-
-.admin-request__amount span {
-  font-family: var(--font-sans);
-  font-size: var(--text-sm);
-  font-weight: var(--weight-regular);
-  color: var(--color-text-muted);
-}
-
-.admin-request__details {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  font-size: var(--text-sm);
-}
-
-.admin-request__details div {
-  display: flex;
-  gap: var(--space-2);
-}
-
-.admin-request__details dt {
-  flex: none;
-  min-width: 6.5em;
-  color: var(--color-text-muted);
-}
-
-.admin-request__details dd {
-  overflow-wrap: anywhere;
-}
-
-.admin-request__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  margin-top: auto;
-  padding-top: var(--space-2);
-}
-
-@media (max-width: 1100px) {
-  .admin-requests {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
 @media (max-width: 560px) {
   .checkout-step {
     padding: var(--space-4);
@@ -539,10 +409,6 @@
 
   .checkout-status {
     padding: var(--space-5) var(--space-4);
-  }
-
-  .admin-request {
-    grid-template-columns: 96px minmax(0, 1fr);
   }
 }
 
@@ -610,4 +476,294 @@
   font-size: var(--text-sm);
   font-weight: var(--weight-regular);
   color: var(--color-text-muted);
+}
+
+/* ==========================================================================
+   Subscription requests: the customer's orders page and the admin's list
+   ========================================================================== */
+
+/* A request's status, the same everywhere. */
+.status-pill {
+  display: inline-block;
+  padding: 1px var(--space-2);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-semibold);
+  white-space: nowrap;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-pill);
+}
+
+.status-pill.is-pending {
+  color: var(--color-on-brand);
+  background: var(--color-brand);
+  border-color: var(--color-brand);
+}
+
+.status-pill.is-reviewing {
+  color: var(--color-brand-strong);
+  background: var(--color-brand-soft);
+  border-color: var(--color-brand-line);
+}
+
+.status-pill.is-approved {
+  color: var(--color-success);
+  background: var(--color-success-soft);
+  border-color: var(--color-success);
+}
+
+.status-pill.is-rejected {
+  color: var(--color-danger);
+  background: var(--color-danger-soft);
+  border-color: var(--color-danger);
+}
+
+/* ---------- The customer's orders ---------- */
+
+.orders__list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border-top: 1px solid var(--color-border);
+  border-inline-start: 1px solid var(--color-border);
+}
+
+.order-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  background: var(--color-surface);
+  border-inline-end: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.order-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.order-card__title {
+  font-family: var(--font-display);
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+}
+
+.order-card__meta {
+  margin-top: 2px;
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.order-card__meta span {
+  font-family: var(--font-mono);
+}
+
+.order-card__notice {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  font-size: var(--text-sm);
+}
+
+.order-card__notice svg {
+  flex: none;
+  margin-top: 3px;
+}
+
+.order-card__notice.is-error {
+  color: var(--color-danger);
+  background: var(--color-danger-soft);
+}
+
+.order-card__details {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+  padding-top: var(--space-3);
+  font-size: var(--text-sm);
+  border-top: 1px solid var(--color-border);
+}
+
+.order-card__details dt {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.order-card__details dd {
+  font-weight: var(--weight-medium);
+}
+
+.order-card__price-note {
+  display: block;
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-regular);
+  color: var(--color-brand-strong);
+}
+
+.order-card__actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: auto;
+}
+
+/* Sent → reviewed → approved / rejected, as a vertical timeline. */
+.order-steps {
+  display: flex;
+  flex-direction: column;
+}
+
+.order-steps__step {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding-block-end: var(--space-3);
+  padding-inline-start: var(--space-6);
+  font-size: var(--text-sm);
+  color: var(--color-text-subtle);
+}
+
+.order-steps__step:last-child {
+  padding-block-end: 0;
+}
+
+/* The dot. */
+.order-steps__step::before {
+  position: absolute;
+  inset-block-start: 5px;
+  inset-inline-start: 0;
+  width: 11px;
+  height: 11px;
+  content: "";
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-strong);
+  border-radius: 50%;
+}
+
+/* The line to the next dot. */
+.order-steps__step:not(:last-child)::after {
+  position: absolute;
+  inset-block: 18px 0;
+  inset-inline-start: 5px;
+  width: 1px;
+  content: "";
+  background: var(--color-border);
+}
+
+.order-steps__step.is-done,
+.order-steps__step.is-current,
+.order-steps__step.is-failed {
+  color: var(--color-text);
+}
+
+.order-steps__step.is-done::before {
+  background: var(--color-brand);
+  border-color: var(--color-brand);
+}
+
+.order-steps__step.is-done:not(:last-child)::after {
+  background: var(--color-brand);
+}
+
+.order-steps__step.is-current .order-steps__label {
+  font-weight: var(--weight-semibold);
+}
+
+.order-steps__step.is-current::before {
+  border-color: var(--color-brand);
+  box-shadow: inset 0 0 0 2px var(--color-surface), inset 0 0 0 6px var(--color-brand);
+  animation: order-pulse 1.8s ease-in-out infinite;
+}
+
+.order-steps__step.is-failed::before {
+  background: var(--color-danger);
+  border-color: var(--color-danger);
+}
+
+.order-steps__step.is-failed .order-steps__label {
+  font-weight: var(--weight-semibold);
+  color: var(--color-danger);
+}
+
+.order-steps__note {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+@keyframes order-pulse {
+  50% {
+    box-shadow: inset 0 0 0 2px var(--color-surface), inset 0 0 0 6px var(--color-brand), 0 0 0 4px var(--color-brand-soft);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .order-steps__step.is-current::before {
+    animation: none;
+  }
+}
+
+@media (max-width: 1100px) {
+  .orders__list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 560px) {
+  .order-card {
+    padding: var(--space-4);
+  }
+
+  .order-card__details {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* ---------- Admin: the orders list ---------- */
+
+.admin-orders__filters {
+  margin-bottom: 0;
+}
+
+.admin-order-age {
+  display: block;
+  font-weight: var(--weight-medium);
+  white-space: nowrap;
+}
+
+/* Waiting more than a day. */
+.admin-order-age.is-late {
+  color: var(--color-danger);
+}
+
+.admin-order-note {
+  max-width: 22ch;
+}
+
+.admin-order-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.admin-status-choices {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(8.5rem, 1fr));
+  gap: var(--space-2);
+}
+
+.admin-order-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--color-warning);
+  background: var(--color-warning-soft);
+}
+
+.admin-order-warning svg {
+  flex: none;
+  margin-top: 3px;
 }

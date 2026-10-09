@@ -19,6 +19,7 @@ import { CardForm } from './CardForm';
 import { Icon } from './Icon';
 import { Modal } from './Modal';
 import { ProjectForm } from './ProjectForm';
+import { ShareDialog } from './ShareDialog';
 import { accentProps } from './ui';
 
 type DialogOf<K extends Dialog['kind']> = Extract<Dialog, { kind: K }>;
@@ -334,6 +335,8 @@ export function DialogHost() {
     case 'create-shelf':
     case 'rename-shelf':
       return <ShelfDialog key={dialog.kind} dialog={dialog} />;
+    case 'share':
+      return <ShareDialog key="share" kind={dialog.target} sourceId={dialog.sourceId} />;
     case 'confirm':
       return <ConfirmDialog key="confirm" dialog={dialog} />;
   }

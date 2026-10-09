@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { BRAIN_PATHS, BRAIN_VIEWBOX } from './brain-paths';
 
 /* Minimal stroke icon set (24×24 grid). Icons always accompany text or an aria-label. */
 const PATHS = {
@@ -34,6 +35,12 @@ const PATHS = {
       <rect x="4" y="5" width="13" height="15" />
       <path d="M8 2h12v15" />
       <path d="m8 12.5 2.5 2.5 4-5" />
+    </>
+  ),
+  receipt: (
+    <>
+      <path d="M6 3h12v18l-3-2-3 2-3-2-3 2z" />
+      <path d="M9 8h6M9 12h6M9 16h3" />
     </>
   ),
   gem: (
@@ -267,11 +274,16 @@ export function Icon({ name, size = 20, className = '' }: { name: IconName; size
   );
 }
 
+/** The Rusookh logo: the brain on the brand square. */
 export function BrandMark() {
   return (
     <svg className="brand__mark" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
       <rect width="32" height="32" rx="7" fill="currentColor" />
-      <path d="M23 10.5h-6M23 16h-9.5M23 21.5H9" strokeWidth="2.4" strokeLinecap="round" />
+      <svg className="brand__glyph" x="5" y="5" width="22" height="22" viewBox={BRAIN_VIEWBOX}>
+        {BRAIN_PATHS.map((path) => (
+          <path key={path.slice(0, 16)} d={path} />
+        ))}
+      </svg>
     </svg>
   );
 }

@@ -81,3 +81,20 @@ export function formatRelativeDate(isoDate: ISODate, today: ISODate = getToday()
   if (diff <= 10) return `بعد ${formatCount(diff, 'days')}`;
   return formatShortDate(isoDate, today);
 }
+
+/** How long ago a moment was: "الآن", "منذ 5 دقائق", "منذ ساعتين", "منذ 3 أيام". */
+export function formatTimeAgo(timestamp: string, now: Date = new Date()): string {
+  const minutes = Math.floor((now.getTime() - new Date(timestamp).getTime()) / 60_000);
+  if (minutes < 1) return 'الآن';
+  if (minutes < 60) return `منذ ${formatCount(minutes, 'minutesAgo')}`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `منذ ${formatCount(hours, 'hours')}`;
+  return `منذ ${formatCount(Math.floor(hours / 24), 'days')}`;
+}
+
+/** A moment with its time, e.g. "8 أكتوبر 2026، 3:15 م". */
+export function formatDateTime(timestamp: string): string {
+  return new Intl.DateTimeFormat(LOCALE, { day: 'numeric', month: 'long', year: 'numeric', hour: 'numeric', minute: '2-digit' }).format(
+    new Date(timestamp),
+  );
+}

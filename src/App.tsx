@@ -1,24 +1,28 @@
 import { useEffect } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useNavigate } from 'react-router';
+import { ADMIN_PATH } from './config';
 import { setSyncErrorHandler } from './data/repository';
 import { initSession } from './data/session';
 import { useUiStore } from './store/ui-store';
-import { AppLayout, OpenToAll, PublicOnly, RequireAuth } from './components/AppLayout';
+import { AdminOnly, AppLayout, OpenToAll, PublicOnly, RequireAuth } from './components/AppLayout';
 import { DialogHost } from './components/DialogHost';
 import { Toasts } from './components/Toasts';
 import { useApplyTheme } from './hooks/use-theme';
 import { AuthPage } from './pages/AuthPage';
 import { CardsPage } from './pages/CardsPage';
 import { ForgotPasswordPage, ResetPasswordPage } from './pages/PasswordPages';
-import { AdminPaymentsPage } from './pages/AdminPaymentsPage';
+import { AdminDashboardPage } from './pages/AdminDashboardPage';
 import { CheckoutPage } from './pages/CheckoutPage';
 import { DeveloperPage } from './pages/DeveloperPage';
 import { GuidePage } from './pages/GuidePage';
 import { MobileAppPage } from './pages/MobileAppPage';
+import { OrdersPage } from './pages/OrdersPage';
 import { PricingPage } from './pages/PricingPage';
 import { ProjectDetailsPage } from './pages/ProjectDetailsPage';
 import { ProjectsPage } from './pages/ProjectsPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { SharePage } from './pages/SharePage';
+import { UnsubscribePage } from './pages/UnsubscribePage';
 import { ReviewPage } from './pages/ReviewPage';
 import { TodayPage } from './pages/TodayPage';
 
@@ -68,6 +72,9 @@ export function App() {
         <Route path="/about" element={<Navigate to="/guide" replace />} />
         <Route path="/pricing" element={<OpenToAll><PricingPage /></OpenToAll>} />
         <Route path="/app" element={<OpenToAll><MobileAppPage /></OpenToAll>} />
+        {/* A shared project or shelf, and the reminder email's "stop" link: no account needed. */}
+        <Route path="/s/:shareId" element={<OpenToAll><SharePage /></OpenToAll>} />
+        <Route path="/unsubscribe" element={<OpenToAll><UnsubscribePage /></OpenToAll>} />
 
         <Route element={<RequireAuth><AppLayout /></RequireAuth>}>
           <Route index element={<TodayPage />} />
@@ -78,7 +85,9 @@ export function App() {
           <Route path="projects/:projectId/review" element={<ReviewPage key="project" />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="checkout" element={<CheckoutPage />} />
-          <Route path="admin/payments" element={<AdminPaymentsPage />} />
+          <Route path="orders" element={<OrdersPage />} />
+          {/* Admin only, at an address that's hard to guess, and linked from nowhere in the app. */}
+          <Route path={ADMIN_PATH.slice(1)} element={<AdminOnly><AdminDashboardPage /></AdminOnly>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>

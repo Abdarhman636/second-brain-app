@@ -100,7 +100,7 @@ export function AiCardsDialog({ projectId: preferredProjectId }: { projectId?: s
   const [mode, setMode] = useState<Mode>('text');
   const [text, setText] = useState('');
   const [picked, setPicked] = useState<Picked | null>(null);
-  const [count, setCount] = useState<number>(10);
+  const [count, setCount] = useState<number>(1);
   const [step, setStep] = useState<'compose' | 'loading' | 'review'>('compose');
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [error, setError] = useState('');
@@ -271,7 +271,7 @@ export function AiCardsDialog({ projectId: preferredProjectId }: { projectId?: s
                     disabled={option > usage.remaining}
                     onChange={() => setCount(option)}
                   />
-                  <span className="type-option__label">حتى {option}</span>
+                  <span className="type-option__label">{formatCount(option, 'cards')}</span>
                 </label>
               ))}
             </div>
@@ -310,7 +310,13 @@ export function AiCardsDialog({ projectId: preferredProjectId }: { projectId?: s
             {drafts.map((draft, index) => {
               const type = getCardType(draft.type);
               const [frontLabel, backLabel] =
-                draft.type === 'qa' ? ['السؤال', 'الجواب'] : draft.type === 'definition' ? ['المصطلح', 'التعريف'] : ['الملاحظة', ''];
+                draft.type === 'qa'
+                  ? ['السؤال', 'الجواب']
+                  : draft.type === 'definition'
+                    ? ['المصطلح', 'التعريف']
+                    : draft.type === 'quote'
+                      ? ['بداية الاقتباس (تظهر)', 'بقيته (تتذكرها)']
+                      : ['الملاحظة', ''];
               return (
                 <li key={index} className={`ai-review__card${draft.keep ? '' : ' is-skipped'}`}>
                   <label className="ai-review__keep">

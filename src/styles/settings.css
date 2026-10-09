@@ -145,7 +145,7 @@
 }
 
 .theme-choice--dark .theme-choice__preview {
-  background: #0f0f0f;
+  background: #080808;
 }
 
 .theme-choice__sidebar,
@@ -161,8 +161,8 @@
 
 .theme-choice--dark .theme-choice__sidebar,
 .theme-choice--dark .theme-choice__cell {
-  background: #181818;
-  border: 1px solid #2c2c2b;
+  background: #262624;
+  border: 1px solid #4a4a46;
 }
 
 .theme-choice__cell--accent {
@@ -309,4 +309,11 @@
   .limit-choices {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
+}
+
+/* ---------- Daily reminder ---------- */
+
+.reminder-hour {
+  max-width: 12rem;
+  margin-top: var(--space-3);
 }

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { Link, Navigate, Outlet, useLocation, useNavigate } from 'react-router';
 import { retryLoad, signOut as endAccountSession } from '../data/session';
+import { takePendingShare } from '../data/shares';
 import { formatShortDate, toISODate } from '../domain/date-utils';
 import { formatCount, getInitial } from '../domain/format';
 import { getDaysUntilExpiry, PLANS, RENEWAL_REMINDER_DAYS } from '../domain/plans';
@@ -16,13 +17,15 @@ import { useUiStore } from '../store/ui-store';
 import { Footer } from './Footer';
 import { BrandMark, Icon, type IconName } from './Icon';
 
-type Section = 'today' | 'projects' | 'cards' | 'pricing' | 'settings' | 'admin';
+type Section = 'today' | 'projects' | 'cards' | 'pricing' | 'orders' | 'settings';
 
-const NAV_ITEMS: { section: Section; to: string; label: string; icon: IconName }[] = [
+const NAV_ITEMS: { section: Section; to: string; label: string; icon: IconName; accountOnly?: boolean }[] = [
   { section: 'today', to: '/', label: 'اليوم', icon: 'today' },
   { section: 'projects', to: '/projects', label: 'الرفوف والمشاريع', icon: 'projects' },
   { section: 'cards', to: '/cards', label: 'البطاقات', icon: 'cards' },
   { section: 'pricing', to: '/pricing', label: 'الباقات والأسعار', icon: 'gem' },
+  // Subscription requests need an account (there are none in the demo).
+  { section: 'orders', to: '/orders', label: 'الطلبات', icon: 'receipt', accountOnly: true },
   { section: 'settings', to: '/settings', label: 'الإعدادات', icon: 'settings' },
 ];
 
@@ -35,7 +38,6 @@ function getPageKey(pathname: string): string {
 function getSection(page: string): Section | null {
   if (page === 'review') return 'today';
   if (page === 'checkout') return 'pricing';
-  if (page === 'admin') return 'admin';
   return NAV_ITEMS.find((item) => item.section === page)?.section ?? null;
 }
 
@@ -84,7 +86,7 @@ function SidebarUser({ onNavigate }: { onNavigate: () => void }) {
   );
 }
 
-/** Free accounts: how much of the plan is used, with a way up. */
+/** The plan: for free accounts, how much is used and a way up; for paid ones, the end date (and usage where the plan has limits). */
 function SidebarPlan({ onNavigate }: { onNavigate: () => void }) {
   const user = useAppStore((state) => state.user);
   const mode = useAppStore((state) => state.mode);
@@ -92,9 +94,11 @@ function SidebarPlan({ onNavigate }: { onNavigate: () => void }) {
   const projects = useAppStore((state) => state.projects);
   const cards = useAppStore((state) => state.cards);
   if (mode !== 'account' || !user) return null;
+  const counts = countResources({ user, mode, shelves, projects, cards });
 
   // Paid: the plan and its end date, and a nudge to renew as it comes near.
   if (user.plan !== 'free') {
+    const { limits } = PLANS[user.plan];
     const daysLeft = user.planExpiresAt ? getDaysUntilExpiry(user.planExpiresAt) : 0;
     const renewSoon = daysLeft <= RENEWAL_REMINDER_DAYS;
     return (
@@ -122,12 +126,16 @@ function SidebarPlan({ onNavigate }: { onNavigate: () => void }) {
               : `ينتهي اشتراكك خلال ${formatCount(daysLeft, 'days')}`
             : user.planExpiresAt && `ساري حتى ${formatShortDate(toISODate(new Date(user.planExpiresAt)))}`}
         </span>
+        {limits.cards !== null && (
+          <span className="sidebar-plan__usage">
+            {counts.cards}/{limits.cards} بطاقة · {counts.projects}/{limits.projects} مشروع · {counts.shelves}/{limits.shelves} رف
+          </span>
+        )}
       </Link>
     );
   }
 
   const { limits, name } = PLANS.free;
-  const counts = countResources({ user, mode, shelves, projects, cards });
   const cardLimit = limits.cards ?? 0;
 
   return (
@@ -153,7 +161,6 @@ function Sidebar({ section, id, onNavigate }: { section: Section | null; id: str
   const today = useToday();
   const dueCount = useTodaysReviews(today).cards.length;
   const mode = useAppStore((state) => state.mode);
-  const isAdmin = useAppStore((state) => state.user?.isAdmin ?? false);
   const openDialog = useUiStore((state) => state.openDialog);
   const navigate = useNavigate();
 
@@ -193,7 +200,7 @@ function Sidebar({ section, id, onNavigate }: { section: Section | null; id: str
       <nav className="sidebar-nav" aria-label="التنقل الرئيسي">
         <p className="sidebar__label">القائمة</p>
         <ul role="list">
-          {NAV_ITEMS.map((item) => (
+          {NAV_ITEMS.filter((item) => !item.accountOnly || mode === 'account').map((item) => (
             <li key={item.section}>
               <Link
                 className="sidebar-nav__link"
@@ -211,19 +218,6 @@ function Sidebar({ section, id, onNavigate }: { section: Section | null; id: str
               </Link>
             </li>
           ))}
-          {isAdmin && (
-            <li>
-              <Link
-                className="sidebar-nav__link"
-                to="/admin/payments"
-                aria-current={section === 'admin' ? 'page' : undefined}
-                onClick={onNavigate}
-              >
-                <Icon name="check" size={18} />
-                <span className="sidebar-nav__label">طلبات الاشتراك</span>
-              </Link>
-            </li>
-          )}
         </ul>
       </nav>
 
@@ -289,6 +283,17 @@ function MobileBar({ menuOpen, sidebarId, onToggleMenu }: { menuOpen: boolean; s
 }
 
 /** Signed-in shell: sidebar (a drawer on phones), page, global shortcuts. */
+/** Signed up (or in) from a shared link: take the user back to it. */
+function usePendingShare() {
+  const mode = useAppStore((state) => state.mode);
+  const navigate = useNavigate();
+  useEffect(() => {
+    if (mode !== 'account') return;
+    const shareId = takePendingShare();
+    if (shareId) navigate(`/s/${shareId}`, { replace: true });
+  }, [mode, navigate]);
+}
+
 export function AppLayout({ children }: { children?: ReactNode }) {
   const { pathname } = useLocation();
   const mainRef = useRef<HTMLElement>(null);
@@ -299,6 +304,7 @@ export function AppLayout({ children }: { children?: ReactNode }) {
   const closeMenu = useCallback(() => setMenuOpen(false), []);
   useGlobalShortcuts();
   useVacationExpiry(useToday());
+  usePendingShare();
 
   // Page-level styling hooks (e.g. review focus mode) key off <body data-page>.
   useEffect(() => {
@@ -413,6 +419,15 @@ export function RequireAuth({ children }: { children: ReactNode }) {
   if (phase === 'starting' || phase === 'loading') return <SessionLoading />;
   if (phase === 'error') return <SessionError message={error ?? 'تعذّر تحميل بياناتك.'} />;
   return <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />;
+}
+
+/**
+ * Admin pages: anyone who isn't an admin is sent home, as if the page didn't
+ * exist. (The data itself is protected in the database, not by this guard.)
+ */
+export function AdminOnly({ children }: { children: ReactNode }) {
+  const isAdmin = useAppStore((state) => state.user?.isAdmin ?? false);
+  return isAdmin ? children : <Navigate to="/" replace />;
 }
 
 /** Once signed in, leave the auth pages for the page originally requested (or home). */

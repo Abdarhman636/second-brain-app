@@ -139,16 +139,17 @@
  */
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --color-background: #0f0f0f;
-  --color-surface: #181818;
-  --color-surface-sunken: #222222;
-  --color-elevated: #1c1c1c;
-  --color-field: #141414;
-  --color-text: #ededeb;
-  --color-text-muted: #a9a9a6;
-  --color-text-subtle: #8c8c89;
-  --color-border: #2c2c2b;
-  --color-border-strong: #474745;
+  /* Layers step up clearly: ground → cells → fields (raised, as in light mode). */
+  --color-background: #080808;
+  --color-surface: #262624;
+  --color-surface-sunken: #353532;
+  --color-elevated: #2c2c2a;
+  --color-field: #32322f;
+  --color-text: #f4f4f1;
+  --color-text-muted: #c4c4be;
+  --color-text-subtle: #a3a39c;
+  --color-border: #4a4a46;
+  --color-border-strong: #6b6b65;
   --color-inverse: #ededeb;
   --color-inverse-hover: #ffffff;
   --color-on-inverse: #111111;
@@ -157,8 +158,8 @@
   --color-brand: #f28543;
   --color-brand-hover: #f69a61;
   --color-brand-strong: #f69a61;
-  --color-brand-soft: #3a2518;
-  --color-brand-line: #6b3a1d;
+  --color-brand-soft: #3f2617;
+  --color-brand-line: #8a4a22;
   --color-success: #7cc29b;
   --color-success-soft: #1d2f24;
   --color-warning: #e3a25a;
@@ -170,9 +171,9 @@
   --color-streak-strong: #f6a774;
   --color-streak-soft: #261b14;
   --color-streak-line: #4a3021;
-  --color-journey-learning: #3a3a38;
-  --color-journey-strengthening: #7d7d7a;
-  --color-journey-rooted: #ededeb;
+  --color-journey-learning: #55554f;
+  --color-journey-strengthening: #8d8d89;
+  --color-journey-rooted: #f2f2ef;
   --accent-text-mix: #ffffff;
   --shadow-md: 0 10px 28px rgba(0, 0, 0, 0.45);
   --shadow-modal: 0 28px 70px rgba(0, 0, 0, 0.6);

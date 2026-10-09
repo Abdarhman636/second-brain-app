@@ -16,6 +16,7 @@ import { useAppStore } from '../store/app-store';
 import { useSessionStore } from '../store/session-store';
 import { memoryRepository } from './memory-repository';
 import { fetchSubscription } from './payments';
+import { ensureReminderSettings } from './reminders';
 import { DEMO_USER } from './mock-data';
 import { flushWrites } from './repository';
 import { supabase } from './supabase/client';
@@ -85,6 +86,20 @@ function toUser(user: SupabaseUser): User {
 
 let loadingUserId: string | null = null;
 
+/**
+ * The user as the server has it now. The saved session can be stale: a role
+ * given by SQL (e.g. admin) only reaches it at the next sign-in or token
+ * refresh. When the role changed, refresh the session too, so the database
+ * (which reads the role from the session token) sees it as well.
+ */
+async function fetchCurrentUser(sessionUser: SupabaseUser): Promise<SupabaseUser> {
+  if (!supabase) return sessionUser;
+  const { data, error } = await supabase.auth.getUser();
+  if (error || !data.user) return sessionUser;
+  if (data.user.app_metadata.role !== sessionUser.app_metadata.role) await supabase.auth.refreshSession();
+  return data.user;
+}
+
 async function loadAccount(supabaseUser: SupabaseUser) {
   if (!supabase || loadingUserId === supabaseUser.id || useAppStore.getState().user?.id === supabaseUser.id) return;
 
@@ -93,10 +108,16 @@ async function loadAccount(supabaseUser: SupabaseUser) {
   setPhase('loading');
   try {
     const repository = createSupabaseRepository(supabase, supabaseUser.id);
-    const [data, subscription] = await Promise.all([repository.loadUserData(getToday()), fetchSubscription(supabase, supabaseUser.id)]);
-    const user = { ...toUser(supabaseUser), plan: subscription.plan, planExpiresAt: subscription.expiresAt };
+    const [data, subscription, currentUser] = await Promise.all([
+      repository.loadUserData(getToday()),
+      fetchSubscription(supabase, supabaseUser.id),
+      fetchCurrentUser(supabaseUser),
+    ]);
+    const user = { ...toUser(currentUser), plan: subscription.plan, planExpiresAt: subscription.expiresAt };
     useAppStore.getState().startSession(user, data, repository);
     setPhase('signed-in');
+    // A new account gets the daily reminder, in this device's time zone.
+    void ensureReminderSettings();
   } catch (error) {
     console.error('[session] could not load user data', error);
     setPhase('error', MESSAGES.loadFailed);

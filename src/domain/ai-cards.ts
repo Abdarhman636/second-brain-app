@@ -4,17 +4,17 @@
  */
 import type { CardBody } from './types';
 
-export type SuggestedCardType = 'qa' | 'definition' | 'note';
+export type SuggestedCardType = 'qa' | 'definition' | 'quote' | 'note';
 
 export interface SuggestedCard {
   type: SuggestedCardType;
-  /** qa: the question. definition: the term. note: the whole note. */
+  /** qa: the question. definition: the term. quote: its opening words. note: the whole note. */
   front: string;
-  /** qa: the answer. definition: the definition. note: empty. */
+  /** qa: the answer. definition: the definition. quote: the rest of it. note: empty. */
   back: string;
 }
 
-export const AI_CARD_COUNTS = [5, 10, 15] as const;
+export const AI_CARD_COUNTS = [1, 5, 10, 15] as const;
 export const AI_TEXT_MIN_CHARS = 40;
 export const AI_TEXT_MAX_CHARS = 12_000;
 
@@ -25,6 +25,8 @@ export function toCardBody(card: SuggestedCard): CardBody {
       return { type: 'qa', content: { question: card.front.trim(), answer: card.back.trim() } };
     case 'definition':
       return { type: 'definition', content: { term: card.front.trim(), definition: card.back.trim() } };
+    case 'quote':
+      return { type: 'quote', content: { text: card.front.trim(), continuation: card.back.trim() } };
     case 'note':
       return { type: 'note', content: { text: [card.front, card.back].map((part) => part.trim()).filter(Boolean).join('\n') } };
   }

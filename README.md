@@ -111,19 +111,19 @@ The UI fonts (IBM Plex Sans Arabic, plus Noto Naskh Arabic for quotes) come from
   | Plan | 6 months | 12 months | Students (6 / 12) | What's in it |
   |---|---|---|---|---|
   | **بذرة** (free) | 0 | 0 | 0 | 1 shelf, 2 projects, 20 cards, with every review feature |
-  | **جذور** | 49 SAR | 79 SAR | 29 / 49 SAR | Unlimited shelves, projects and cards |
-  | **راسخ** | 99 SAR | 149 SAR | 59 / 99 SAR | Everything in جذور, plus AI-made cards from text or a photo (up to 300 a month). Shown as "قريبًا" until the AI feature is built (`available: false` in `src/domain/plans.ts`) |
+  | **جذور** | 49 SAR | 79 SAR | 29 / 49 SAR | Up to 7 shelves, 30 projects and 600 cards |
+  | **راسخ** | 99 SAR | 149 SAR | 59 / 99 SAR | Everything in جذور with no limits on shelves, projects or cards, plus AI-made cards from text or a photo (up to 300 a month). Shown as "قريبًا" until the AI feature is built (`available: false` in `src/domain/plans.ts`) |
 
-  - **Founders' price**: the first 100 subscribers pay the launch prices and keep them on every renewal.
+  - **Founders' price**: the first 30 subscribers pay the launch prices and keep them on every renewal.
     - Launch prices: جذور 29 / 49, or 19 / 35 for students. راسخ 59 / 99, or 39 / 69 for students.
     - A seat is taken when the subscription is approved (the `founders` table).
     - The pricing page shows the seats left.
     - The database decides who gets the founder price.
-  - A free account that tries to add past a limit is sent to `/pricing?reason=…`.
+  - An account on بذرة or جذور that tries to add past its limit is sent to `/pricing?reason=…`.
     - The check is in `openDialog` (ui-store).
     - The database enforces the same limits with insert triggers.
     - Archived projects count, and demo mode has no limits.
-  - The sidebar shows a free account's usage. For a paid plan, it shows a renewal reminder in the last 14 days.
+  - The sidebar shows the usage on plans with limits. For a paid plan, it also shows a renewal reminder in the last 14 days.
   - "قريبًا" note: instant payment by Apple Pay, mada and cards.
 - **Student discount** (about a third off): for accounts that answered **نعم، طالب** and use a **university email**.
   - A university email has an academic domain: `….edu`, `….edu.sa`, `….ac.uk`… Every Saudi university uses `.edu.sa`.
@@ -135,9 +135,15 @@ The UI fonts (IBM Plex Sans Arabic, plus Noto Naskh Arabic for quotes) come from
 - **Manual payment by bank transfer** (`/checkout`), in three steps:
   1. Choose 6 or 12 months.
   2. Transfer the exact amount to the IBAN, following step-by-step instructions with copy buttons.
-  3. Upload a screenshot of the receipt (or a PDF) and send.
+  3. Confirm the transfer (with the sender's name, optionally) and send the request. No receipt is needed.
   - Each request gets a short reference (e.g. `RS-7KQ2M`) to put in the transfer note.
-  - The student can check the status or cancel while the request is pending. If a request is rejected, the student sees the reason.
+  - Requests can't be cancelled. The admin rejects one that never got paid, and the student sees the reason.
+  - Sending a request emails the student its details and the admin a heads-up (see **Payment emails**).
+- **Orders** (`/orders`, «الطلبات» in the sidebar, accounts only): every subscription request the customer sent, with its plan, amount, reference and price notes.
+  - A timeline shows where each one stands: sent → waiting or being reviewed → activated or rejected (with the reason), with the date and time of each step.
+- **Request statuses**: `pending` (بانتظار المراجعة) → `reviewing` (قيد المراجعة) → `approved` (مقبول) or `rejected` (مرفوض).
+  - A customer has one open (pending or reviewing) request at a time.
+  - Approved is final, because the plan was already given. To take a plan back, change it from the users list.
   - Payment details (IBAN, account holder name, WhatsApp) live in `PAYMENT` in `src/config.ts`. Until the IBAN is set, checkout says subscriptions open soon.
 - **AI cards** (راسخ plan, and admins for testing): paste text or pick a photo, choose up to 5, 10 or 15 cards, and get suggestions.
   - Nothing is added until the student reviews and edits the suggestions, then keeps the ones they want.
@@ -152,16 +158,58 @@ The UI fonts (IBM Plex Sans Arabic, plus Noto Naskh Arabic for quotes) come from
     2. Add it as the `ANTHROPIC_API_KEY` secret in Supabase → Edge Functions → Secrets.
     3. Run `npx supabase functions deploy generate-cards --project-ref <ref>`.
     4. Run `supabase/schema.sql` again.
+- **Sharing** (`/s/<id>`, open to everyone): share a project (its page, or its menu) or a shelf (its menu) by link.
+  - The link shows a **snapshot** of the cards, never review progress. Opening «مشاركة» makes the link, or brings it up to date with the latest cards; the address stays the same. There's no button to update or stop it, on purpose: share the link, and others copy it.
+  - Image cards aren't shared (their pictures are in the owner's private storage). A link holds up to 2,000 cards.
+  - Visitors see the cards and the owner's name (never their email). Signed-in users press **«انسخه لحسابي»**: the copy is theirs to edit, due from today, and **counts toward their plan's limits**. If it doesn't fit, they're shown the limit and the plans.
+  - Visitors without an account sign up first and are brought back to the link afterwards, even after confirming their email in another tab.
+  - The owner sees how many people copied it (once per person).
+  - Rules in `src/domain/sharing.ts`. Tables `shares` and `share_copies`, with `get_share` (open to everyone) and `record_share_copy` in `supabase/schema.sql`. An admin can remove a share by deleting its row (Table Editor → shares).
+- **Daily reminder email**: «عندك 12 بطاقة تراجعها اليوم», at the hour the user picks (8 pm by default), in their time zone.
+  - It's on for every account once the app has saved its time zone, and turned off in **Settings → التذكير اليومي** or with the email's «إيقاف التذكير» link (`/unsubscribe`, no sign-in needed).
+  - It's only sent when cards are waiting, counted like the اليوم page: due cards in active projects, within what's left of the daily limit. Nothing is sent during a vacation or before the email is confirmed, and at most one a day.
+  - **How it works:** the `daily-reminders` Edge Function runs every hour. It calls `claim_due_reminders`, which picks the users whose hour has come (or passed within 2 hours, if a run was missed) and marks them, then emails each one. Calling it again sends nothing new.
+  - **Setup:**
+    1. Run `supabase/schema.sql` again.
+    2. The email secrets from **Payment emails** below are needed, including `APP_URL` for the links.
+    3. Deploy without JWT checks, so the scheduler can call it: `npx supabase functions deploy daily-reminders --no-verify-jwt --project-ref <ref>`.
+    4. In Supabase → **Integrations → Cron**, enable Cron, then **Create job**:
+       - name `daily-reminders`;
+       - schedule `0 * * * *` (every hour);
+       - type **Supabase Edge Function**, method POST, function `daily-reminders`.
+  - Gmail sends about 500 emails a day. With more users, move to a provider with your own domain (see **Payment emails**).
 - **Mobile app** (`/app`): the native apps launch once Rusookh reaches 100 users.
   - A live counter (`public_user_count`) shows the number of confirmed accounts.
   - Until launch, the page explains step by step how to add Rusookh to the home screen on iPhone (Safari) and Android (Chrome and Samsung Internet), with each button's English name too.
   - On Android Chrome, it offers one-tap install.
   - The site is installable: `public/manifest.webmanifest` and the icons in `public/icons/` make it open full screen with Rusookh's icon.
-- **Admin** (`/admin/payments`, only for admins): pending requests with the receipt, account email, amount, payer name and reference. Requests priced for students or founders are marked «سعر طالب» / «سعر مؤسس».
-  - **تفعيل** gives the plan for its period. If the plan is still running, the new period is added to its end.
-  - **رفض** asks for a reason, which the student sees.
-  - Approval and rejection run as database functions that check the caller is an admin.
-  - To make an account an admin, see the comment in `supabase/schema.sql`, then sign in again.
+- **Admin dashboard** (`/admrusskh`, set as `ADMIN_PATH` in `src/config.ts`): the app's numbers, the orders, and every user with what matters about them.
+  - **Numbers:** users, active reviewers, subscribers, revenue, pending payments, cards, reviews, AI usage, signups per day, and how users split across plans.
+  - **Orders** (`/admrusskh#orders`): every request with its reference, plan, customer name and email, payer name, amount and price notes, when it was sent and how long ago, and its status.
+    - Filter by status (open requests first, oldest first), and search by reference, name or email.
+    - Requests waiting more than a day are marked red.
+    - **تغيير الحالة** moves a request to another status. Approving gives the plan for its period, added to the end of a plan that's still running. Rejecting asks for a reason, which the customer sees.
+    - It emails the customer the new status, unless you untick the box.
+    - The change runs as a database function that checks the caller is an admin (`set_payment_request_status`).
+    - To make an account an admin, see the comment in `supabase/schema.sql`, then sign in again.
+  - **Users:** name, email, plan and end date, founder or student, content, recent activity, and money paid. Search, filter by plan, sort, and **change anyone's plan** (to a date, or back to free).
+  - **Access:** the dashboard is linked from nowhere in the app, and its address isn't the usual `/admin`; open it by its address. Anyone who isn't an admin is sent to the home page.
+  - **Where the protection is:** the data comes from database functions that refuse non-admins (`admin_dashboard_stats`, `admin_list_users`, `admin_set_plan`). That's what keeps it private, since the browser guard alone can be bypassed.
+- **Payment emails**: the `payment-emails` Supabase Edge Function (`supabase/functions/payment-emails/`) sends them over SMTP. The connection and the email layout live in `supabase/functions/_shared/mail.ts`, shared with `daily-reminders`. With Gmail, they come from your own address.
+  - **New request:** the student gets the request's details and status, and the admin a heads-up. Only the request's owner can trigger it, and only once per request.
+  - **Status change:** the customer gets the new status, the rejection reason, or the plan's end date. Only admins can trigger it.
+  - The function builds each email from the database row, never from what the browser sends, so it can't be used to send anything else.
+  - A failed email never undoes the request or the status change; the admin sees a warning.
+  - **Setup:**
+    1. In your Google account, turn on 2-Step Verification, then create an **App password** (Google account → Security → App passwords).
+    2. In Supabase → Edge Functions → Secrets, add:
+       - `SMTP_USER`: the Gmail address.
+       - `SMTP_PASS`: the app password.
+       - `ADMIN_EMAIL`: where new requests go (defaults to `SMTP_USER`).
+       - `APP_URL` (optional): the app's address, for the buttons in the emails.
+    3. Run `npx supabase functions deploy payment-emails --project-ref <ref>`.
+    4. Run `supabase/schema.sql` again.
+  - Gmail allows about 500 emails a day. To send from your own domain later, set `SMTP_HOST`, `SMTP_PORT` (465) and `MAIL_FROM` for a provider such as Resend or Zoho.
 - **Where plans live**: the `subscriptions` table (`plan`, `expires_at`). No row, or an expired one, means the free plan. Users can read their own row, but only admins can write. Prices, including the student price, are set by the database (`plan_price`), not by the app. Keep them in sync with `src/domain/plans.ts`.
 - **Settings** (`/settings`):
   - **Account**: change your name (saved to your account), see your email, and sign out.
@@ -254,7 +302,7 @@ src/
   components/              AppLayout, KnowledgeCard, ActionMenu, Modal, forms, dialogs…
   lib/image-file.ts        scales and encodes picked images
   config.ts                app settings (developer details, payment details)
-  pages/                   Auth, About, Today (dashboard + stats), Review, Projects, ProjectDetails, Cards, Settings
+  pages/                   Auth, Guide, Today (dashboard + stats), Review, Projects, ProjectDetails, Cards, Settings, Pricing, Checkout, Orders, Admin
   styles/                  CSS by responsibility; tokens in variables.css
 ```
 

@@ -208,7 +208,7 @@ $$;
 
 -- ---------- Subscriptions ---------------------------------------------------------
 -- A paid plan and when it ends. No row (or an expired one) means the free plan.
--- Users can read their own; only admins (through approve_payment_request, or
+-- Users can read their own; only admins (through set_payment_request_status, or
 -- by hand) write them.
 --
 -- To give an account a plan by hand (e.g. for testing):
@@ -235,8 +235,8 @@ create policy "Admins manage subscriptions" on public.subscriptions for all to a
   with check ((select public.is_admin()));
 
 -- ---------- Payment requests --------------------------------------------------------
--- A student's transfer, waiting for an admin to check it against the bank or
--- STC Pay and approve it. Prices are set here, not by the app (keep them in
+-- A student's transfer, waiting for an admin to check it against the bank and
+-- approve it. Status: pending → reviewing (being checked) → approved / rejected. Prices are set here, not by the app (keep them in
 -- sync with src/domain/plans.ts).
 
 -- Students on a university email pay the student price. "University" means an
@@ -251,7 +251,7 @@ as $$
 $$;
 
 -- ---------- Founders ----------------------------------------------------------------
--- The first 100 subscribers pay the launch prices and keep them on every
+-- The first 30 subscribers pay the launch prices and keep them on every
 -- renewal. A seat is taken when an admin approves a founder-priced request.
 
 create table if not exists public.founders (
@@ -274,7 +274,7 @@ security definer
 set search_path = ''
 as $$
   select json_build_object(
-    'seats', 100,
+    'seats', 30,
     'taken', (select count(*) from public.founders),
     'is_founder', exists (select 1 from public.founders f where f.user_id = auth.uid())
   );
@@ -329,8 +329,8 @@ create table if not exists public.payment_requests (
   method       text not null check (method in ('bank')),
   reference    text not null check (char_length(reference) <= 20),
   payer_name   text check (payer_name is null or char_length(payer_name) <= 80),
-  receipt_path text not null,
-  status       text not null default 'pending' check (status in ('pending', 'approved', 'rejected')),
+  receipt_path text, -- older requests only: requests no longer carry a receipt
+  status       text not null default 'pending',
   review_note  text check (review_note is null or char_length(review_note) <= 300),
   created_at   timestamptz not null default now(),
   reviewed_at  timestamptz
@@ -342,11 +342,21 @@ alter table public.payment_requests add column if not exists founder_price boole
 alter table public.payment_requests drop constraint if exists payment_requests_method_check;
 -- NOT VALID: old requests (e.g. by STC Pay, since removed) stay as they are; new ones must be bank transfers.
 alter table public.payment_requests add constraint payment_requests_method_check check (method in ('bank')) not valid;
+alter table public.payment_requests alter column receipt_path drop not null;
+alter table public.payment_requests drop constraint if exists payment_requests_status_check;
+alter table public.payment_requests add constraint payment_requests_status_check
+  check (status in ('pending', 'reviewing', 'approved', 'rejected'));
+-- When the status last changed (the customer's page shows it), and when the
+-- admin was emailed about the new request (so it's sent once).
+alter table public.payment_requests add column if not exists status_changed_at timestamptz;
+alter table public.payment_requests add column if not exists admin_notified_at timestamptz;
 
 create index if not exists payment_requests_user_id_idx on public.payment_requests (user_id);
 create index if not exists payment_requests_status_idx on public.payment_requests (status, created_at);
--- One request waiting at a time per student.
-create unique index if not exists payment_requests_one_pending_idx on public.payment_requests (user_id) where status = 'pending';
+-- One open request (pending or being reviewed) at a time per student.
+drop index if exists public.payment_requests_one_pending_idx;
+create unique index if not exists payment_requests_one_open_idx on public.payment_requests (user_id)
+  where status in ('pending', 'reviewing');
 
 -- The email comes from the session, the price from the price list (the
 -- student price only for a confirmed university email and the student answer),
@@ -364,12 +374,14 @@ begin
     and coalesce((auth.jwt() -> 'user_metadata' ->> 'is_student')::boolean, false);
   -- Founder price for founders, and for anyone while seats are left.
   new.founder_price := exists (select 1 from public.founders f where f.user_id = new.user_id)
-    or (select count(*) from public.founders) < 100;
+    or (select count(*) from public.founders) < 30;
   new.amount := public.plan_price(new.plan, new.period, new.student_price, new.founder_price);
   new.status := 'pending';
   new.review_note := null;
   new.reviewed_at := null;
   new.created_at := now();
+  new.status_changed_at := now();
+  new.admin_notified_at := null;
   return new;
 end;
 $$;
@@ -388,14 +400,18 @@ drop policy if exists "Create own requests" on public.payment_requests;
 create policy "Create own requests" on public.payment_requests for insert to authenticated
   with check ((select auth.uid()) = user_id);
 
--- A student can withdraw a request until it's reviewed.
+-- Requests can't be withdrawn: the admin rejects one that never got paid.
 drop policy if exists "Cancel own pending requests" on public.payment_requests;
-create policy "Cancel own pending requests" on public.payment_requests for delete to authenticated
-  using ((select auth.uid()) = user_id and status = 'pending');
 
--- Approve: give (or extend) the plan, from today or from the current end
--- date if the plan is still running.
-create or replace function public.approve_payment_request(request_id uuid)
+-- Replaced by set_payment_request_status.
+drop function if exists public.approve_payment_request(uuid);
+drop function if exists public.reject_payment_request(uuid, text);
+
+-- The admin moves a request between statuses. Approving gives (or extends)
+-- the plan, from today or from the current end date if the plan is still
+-- running; rejecting keeps a note the customer sees. An approved request is
+-- final (to take a plan back, change it from the users list).
+create or replace function public.set_payment_request_status(request_id uuid, new_status text, note text default null)
 returns void
 language plpgsql
 security definer
@@ -406,62 +422,59 @@ declare
   current_end timestamptz;
 begin
   if not public.is_admin() then
-    raise exception 'Only admins can approve payments';
+    raise exception 'Only admins can review payments';
+  end if;
+  if new_status not in ('pending', 'reviewing', 'approved', 'rejected') then
+    raise exception 'bad_request: unknown status';
   end if;
 
   select * into request from public.payment_requests where id = request_id for update;
-  if request.id is null or request.status <> 'pending' then
-    raise exception 'This request is not waiting for review';
+  if request.id is null then
+    raise exception 'not_found';
+  end if;
+  if request.status = 'approved' then
+    raise exception 'already_approved';
+  end if;
+  if request.status = new_status and new_status <> 'rejected' then
+    return;
   end if;
 
-  select expires_at into current_end from public.subscriptions where user_id = request.user_id;
-  insert into public.subscriptions (user_id, plan, expires_at, updated_at)
-  values (
-    request.user_id,
-    request.plan,
-    greatest(coalesce(current_end, now()), now())
-      + make_interval(months => case request.period when 'half' then 6 else 12 end),
-    now()
-  )
-  on conflict (user_id) do update
-    set plan = excluded.plan, expires_at = excluded.expires_at, updated_at = now();
+  if new_status = 'approved' then
+    select expires_at into current_end from public.subscriptions where user_id = request.user_id;
+    insert into public.subscriptions (user_id, plan, expires_at, updated_at)
+    values (
+      request.user_id,
+      request.plan,
+      greatest(coalesce(current_end, now()), now())
+        + make_interval(months => case request.period when 'half' then 6 else 12 end),
+      now()
+    )
+    on conflict (user_id) do update
+      set plan = excluded.plan, expires_at = excluded.expires_at, updated_at = now();
 
-  -- A founder-priced payment takes a seat (kept even if seats ran out while it waited: it was paid at that price).
-  if request.founder_price then
-    insert into public.founders (user_id) values (request.user_id) on conflict (user_id) do nothing;
+    -- A founder-priced payment takes a seat (kept even if seats ran out while it waited: it was paid at that price).
+    if request.founder_price then
+      insert into public.founders (user_id) values (request.user_id) on conflict (user_id) do nothing;
+    end if;
   end if;
 
-  update public.payment_requests set status = 'approved', reviewed_at = now() where id = request_id;
-end;
-$$;
-
-create or replace function public.reject_payment_request(request_id uuid, note text)
-returns void
-language plpgsql
-security definer
-set search_path = ''
-as $$
-begin
-  if not public.is_admin() then
-    raise exception 'Only admins can reject payments';
-  end if;
+  -- Reopening a request fails on payment_requests_one_open_idx if the customer has sent another one since.
   update public.payment_requests
-    set status = 'rejected', review_note = left(note, 300), reviewed_at = now()
-    where id = request_id and status = 'pending';
-  if not found then
-    raise exception 'This request is not waiting for review';
-  end if;
+    set status = new_status,
+        review_note = case when new_status = 'rejected' then nullif(left(btrim(coalesce(note, '')), 300), '') end,
+        reviewed_at = case when new_status in ('approved', 'rejected') then now() end,
+        status_changed_at = now()
+    where id = request_id;
 end;
 $$;
 
-revoke execute on function public.approve_payment_request(uuid) from public, anon;
-revoke execute on function public.reject_payment_request(uuid, text) from public, anon;
-grant execute on function public.approve_payment_request(uuid) to authenticated;
-grant execute on function public.reject_payment_request(uuid, text) to authenticated;
+revoke execute on function public.set_payment_request_status(uuid, text, text) from public, anon;
+grant execute on function public.set_payment_request_status(uuid, text, text) to authenticated;
 
--- ---------- Plans: free limits --------------------------------------------------
+-- ---------- Plans: limits --------------------------------------------------------
 -- An account is on the free plan unless it has a subscription that hasn't
--- expired. Keep the numbers in sync with src/domain/plans.ts.
+-- expired. بذرة (free) and جذور (plus) have limits; راسخ (pro) has none.
+-- Keep the numbers in sync with src/domain/plans.ts.
 
 create or replace function public.enforce_plan_limits()
 returns trigger
@@ -476,7 +489,7 @@ declare
   already_exists boolean;
 begin
   select sub.plan into user_plan from public.subscriptions sub where sub.user_id = new.user_id and sub.expires_at > now();
-  if user_plan in ('plus', 'pro') then
+  if user_plan = 'pro' then
     return new;
   end if;
 
@@ -486,7 +499,11 @@ begin
     return new;
   end if;
 
-  max_rows := case tg_table_name when 'shelves' then 1 when 'projects' then 2 when 'cards' then 20 end;
+  if user_plan = 'plus' then
+    max_rows := case tg_table_name when 'shelves' then 7 when 'projects' then 30 when 'cards' then 600 end;
+  else
+    max_rows := case tg_table_name when 'shelves' then 1 when 'projects' then 2 when 'cards' then 20 end;
+  end if;
   execute format('select count(*) from public.%I where user_id = $1', tg_table_name) into current_rows using new.user_id;
   if current_rows >= max_rows then
     raise exception 'plan_limit:%', tg_table_name using hint = 'Upgrade the plan to add more.';
@@ -693,7 +710,9 @@ grant execute on function public.reserve_ai_cards(integer, text) to authenticate
 grant execute on function public.settle_ai_cards(uuid, uuid, integer) to authenticated;
 
 -- ---------- Storage: payment receipts -------------------------------------------
--- Private. A student uploads under "<their user id>/..."; admins can read all.
+-- No longer used: requests don't carry a receipt any more. The private bucket
+-- stays for receipts sent earlier (admins can still read them, or delete them
+-- in Supabase → Storage), and nobody can upload to it.
 
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values ('payment-receipts', 'payment-receipts', false, 5242880, array['image/png', 'image/jpeg', 'image/webp', 'application/pdf'])
@@ -703,10 +722,356 @@ on conflict (id) do update
       allowed_mime_types = excluded.allowed_mime_types;
 
 drop policy if exists "Payment receipts: own folder" on storage.objects;
-create policy "Payment receipts: own folder" on storage.objects for all to authenticated
-  using (bucket_id = 'payment-receipts' and (storage.foldername(name))[1] = (select auth.uid())::text)
-  with check (bucket_id = 'payment-receipts' and (storage.foldername(name))[1] = (select auth.uid())::text);
 
 drop policy if exists "Payment receipts: admins read" on storage.objects;
 create policy "Payment receipts: admins read" on storage.objects for select to authenticated
   using (bucket_id = 'payment-receipts' and (select public.is_admin()));
+
+-- ---------- Admin dashboard ------------------------------------------------------
+-- Statistics, the user list, and changing a user's plan. Every function
+-- refuses anyone who isn't an admin (see public.is_admin), so the data
+-- never reaches a regular account even if it calls them directly.
+
+create or replace function public.admin_dashboard_stats()
+returns json
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  result json;
+begin
+  if not public.is_admin() then
+    raise exception 'not_allowed';
+  end if;
+
+  select json_build_object(
+    'users_total',       (select count(*) from auth.users where email_confirmed_at is not null),
+    'users_unconfirmed', (select count(*) from auth.users where email_confirmed_at is null),
+    'users_new_7d',      (select count(*) from auth.users where email_confirmed_at is not null and created_at >= now() - interval '7 days'),
+    'users_new_30d',     (select count(*) from auth.users where email_confirmed_at is not null and created_at >= now() - interval '30 days'),
+    'active_today',      (select count(distinct user_id) from public.review_log where date >= current_date),
+    'active_7d',         (select count(distinct user_id) from public.review_log where date >= current_date - 6),
+    'active_30d',        (select count(distinct user_id) from public.review_log where date >= current_date - 29),
+    'students',          (select count(*) from auth.users where raw_user_meta_data ->> 'is_student' = 'true'),
+    'academic_emails',   (select count(*) from auth.users where public.is_academic_email(email)),
+    'plan_plus',         (select count(*) from public.subscriptions where plan = 'plus' and expires_at > now()),
+    'plan_pro',          (select count(*) from public.subscriptions where plan = 'pro' and expires_at > now()),
+    'expiring_14d',      (select count(*) from public.subscriptions where expires_at > now() and expires_at <= now() + interval '14 days'),
+    'founders_taken',    (select count(*) from public.founders),
+    'founder_seats',     30,
+    'revenue_total',     coalesce((select sum(amount) from public.payment_requests where status = 'approved'), 0),
+    'revenue_month',     coalesce((select sum(amount) from public.payment_requests where status = 'approved' and reviewed_at >= date_trunc('month', now())), 0),
+    'payments_pending',  (select count(*) from public.payment_requests where status in ('pending', 'reviewing')),
+    'shelves',           (select count(*) from public.shelves),
+    'projects',          (select count(*) from public.projects),
+    'cards',             (select count(*) from public.cards),
+    'reviews_total',     (select count(*) from public.review_log),
+    'reviews_7d',        (select count(*) from public.review_log where date >= current_date - 6),
+    'ai_cards_month',    coalesce((select sum(cards) from public.ai_usage where created_at >= date_trunc('month', now())), 0),
+    'ai_cards_cap',      public.app_setting('ai_monthly_cards_total'),
+    'signups_by_day', (
+      select coalesce(json_agg(json_build_object('day', day::date, 'count', total) order by day), '[]'::json)
+      from (
+        select day, (select count(*) from auth.users u where u.created_at::date = day::date) as total
+        from generate_series((current_date - 29)::timestamp, current_date::timestamp, interval '1 day') as day
+      ) days
+    )
+  ) into result;
+  return result;
+end;
+$$;
+
+create or replace function public.admin_list_users()
+returns json
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  result json;
+begin
+  if not public.is_admin() then
+    raise exception 'not_allowed';
+  end if;
+
+  select coalesce(json_agg(row_to_json(t) order by t.created_at desc), '[]'::json) into result
+  from (
+    select
+      u.id,
+      u.email,
+      u.raw_user_meta_data ->> 'name' as name,
+      u.raw_user_meta_data ->> 'is_student' = 'true' as is_student,
+      public.is_academic_email(u.email) as academic_email,
+      u.created_at,
+      u.last_sign_in_at,
+      u.email_confirmed_at is not null as confirmed,
+      coalesce(u.raw_app_meta_data ->> 'role' = 'admin', false) as is_admin,
+      s.plan,
+      s.expires_at,
+      exists (select 1 from public.founders f where f.user_id = u.id) as founder,
+      (select count(*) from public.shelves x where x.user_id = u.id) as shelves,
+      (select count(*) from public.projects p where p.user_id = u.id) as projects,
+      (select count(*) from public.cards c where c.user_id = u.id) as cards,
+      (select count(*) from public.review_log r where r.user_id = u.id and r.date >= current_date - 29) as reviews_30d,
+      (select max(r.date) from public.review_log r where r.user_id = u.id) as last_review,
+      (select coalesce(sum(a.cards), 0) from public.ai_usage a where a.user_id = u.id and a.created_at >= date_trunc('month', now())) as ai_cards_month,
+      (select coalesce(sum(pr.amount), 0) from public.payment_requests pr where pr.user_id = u.id and pr.status = 'approved') as paid_total
+    from auth.users u
+    left join public.subscriptions s on s.user_id = u.id
+  ) t;
+  return result;
+end;
+$$;
+
+-- Give a user a plan until a date, or move them back to the free plan.
+create or replace function public.admin_set_plan(target uuid, new_plan text, new_expires_at timestamptz)
+returns void
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $$
+begin
+  if not public.is_admin() then
+    raise exception 'not_allowed';
+  end if;
+  if new_plan = 'free' then
+    delete from public.subscriptions where user_id = target;
+    return;
+  end if;
+  if new_plan not in ('plus', 'pro') or new_expires_at is null or new_expires_at <= now() then
+    raise exception 'bad_request';
+  end if;
+  insert into public.subscriptions (user_id, plan, expires_at, updated_at)
+  values (target, new_plan, new_expires_at, now())
+  on conflict (user_id) do update
+    set plan = excluded.plan, expires_at = excluded.expires_at, updated_at = now();
+end;
+$$;
+
+revoke execute on function public.admin_dashboard_stats() from public, anon;
+revoke execute on function public.admin_list_users() from public, anon;
+revoke execute on function public.admin_set_plan(uuid, text, timestamptz) from public, anon;
+grant execute on function public.admin_dashboard_stats() to authenticated;
+grant execute on function public.admin_list_users() to authenticated;
+grant execute on function public.admin_set_plan(uuid, text, timestamptz) to authenticated;
+
+-- ---------- Sharing --------------------------------------------------------------
+-- A project or shelf shared by link (/s/<id>). The link shows a snapshot taken
+-- when it was shared (the owner can refresh it), never the live rows, and
+-- never review progress. Anyone with the link can view it (get_share);
+-- signed-in users copy it into their own account, within their plan's limits.
+
+create table if not exists public.shares (
+  -- Random and unguessable (12 letters and digits, made by the app).
+  id         text primary key check (id ~ '^[A-Za-z0-9]{12}$'),
+  user_id    uuid not null default auth.uid() references auth.users (id) on delete cascade,
+  kind       text not null check (kind in ('project', 'shelf')),
+  -- The shared project or shelf. One link per item.
+  source_id  uuid not null,
+  snapshot   jsonb not null check (octet_length(snapshot::text) <= 2000000),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create unique index if not exists shares_source_idx on public.shares (user_id, source_id);
+
+drop trigger if exists shares_set_updated_at on public.shares;
+create trigger shares_set_updated_at before update on public.shares
+  for each row execute function public.set_updated_at();
+
+alter table public.shares enable row level security;
+
+drop policy if exists "Own shares" on public.shares;
+create policy "Own shares" on public.shares for all to authenticated
+  using ((select auth.uid()) = user_id)
+  with check ((select auth.uid()) = user_id);
+
+-- Admins can take down a share.
+drop policy if exists "Admins remove shares" on public.shares;
+create policy "Admins remove shares" on public.shares for delete to authenticated
+  using ((select public.is_admin()));
+
+-- Who copied a share (once per person), for the count the owner sees.
+create table if not exists public.share_copies (
+  share_id  text not null references public.shares (id) on delete cascade,
+  user_id   uuid not null default auth.uid() references auth.users (id) on delete cascade,
+  copied_at timestamptz not null default now(),
+  primary key (share_id, user_id)
+);
+
+-- No policies: only the functions below read or write it.
+alter table public.share_copies enable row level security;
+
+-- A shared item for its page, open to everyone with the link. Shows the
+-- owner's name, never their email.
+create or replace function public.get_share(share_id text)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select jsonb_build_object(
+    'id', s.id,
+    'kind', s.kind,
+    'snapshot', s.snapshot,
+    'updated_at', s.updated_at,
+    'owner_name', nullif(btrim(u.raw_user_meta_data ->> 'name'), ''),
+    'copies', (select count(*) from public.share_copies c where c.share_id = s.id),
+    'is_owner', s.user_id = auth.uid(),
+    'copied_by_me', exists (select 1 from public.share_copies c where c.share_id = s.id and c.user_id = auth.uid())
+  )
+  from public.shares s
+  join auth.users u on u.id = s.user_id
+  where s.id = get_share.share_id;
+$$;
+
+create or replace function public.record_share_copy(share_id text)
+returns void
+language sql
+security definer
+set search_path = ''
+as $$
+  insert into public.share_copies (share_id, user_id)
+  select s.id, auth.uid() from public.shares s where s.id = record_share_copy.share_id and auth.uid() is not null
+  on conflict do nothing;
+$$;
+
+revoke execute on function public.get_share(text) from public;
+revoke execute on function public.record_share_copy(text) from public, anon;
+grant execute on function public.get_share(text) to anon, authenticated;
+grant execute on function public.record_share_copy(text) to authenticated;
+
+-- ---------- Daily reminder -----------------------------------------------------------
+-- An email at the hour the user picks, in their time zone, when cards are
+-- waiting: "عندك 12 بطاقة تراجعها اليوم". On by default (at 8 pm) once the app
+-- has saved the user's time zone; turned off from Settings or the email's link.
+--
+-- The daily-reminders Edge Function runs every hour (Supabase → Integrations →
+-- Cron) and sends what claim_due_reminders returns.
+
+create table if not exists public.reminder_settings (
+  user_id           uuid primary key default auth.uid() references auth.users (id) on delete cascade,
+  enabled           boolean not null default true,
+  hour              smallint not null default 20 check (hour between 0 and 23),
+  time_zone         text not null default 'Asia/Riyadh' check (char_length(time_zone) <= 64),
+  -- The user's local day of the last reminder, so there's one a day at most.
+  last_sent_on      date,
+  -- For the email's one-click "stop" link.
+  unsubscribe_token uuid not null default gen_random_uuid(),
+  updated_at        timestamptz not null default now()
+);
+
+-- An unknown time zone would break the hourly run for everyone: fall back to Riyadh.
+create or replace function public.prepare_reminder_settings()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if not exists (select 1 from pg_catalog.pg_timezone_names where name = new.time_zone) then
+    new.time_zone := 'Asia/Riyadh';
+  end if;
+  new.updated_at := now();
+  return new;
+end;
+$$;
+
+drop trigger if exists reminder_settings_prepare on public.reminder_settings;
+create trigger reminder_settings_prepare before insert or update on public.reminder_settings
+  for each row execute function public.prepare_reminder_settings();
+
+alter table public.reminder_settings enable row level security;
+
+drop policy if exists "Own reminder settings" on public.reminder_settings;
+create policy "Own reminder settings" on public.reminder_settings for all to authenticated
+  using ((select auth.uid()) = user_id)
+  with check ((select auth.uid()) = user_id);
+
+-- The email's "stop" link works without signing in.
+create or replace function public.unsubscribe_reminders(token uuid)
+returns boolean
+language sql
+security definer
+set search_path = ''
+as $$
+  with changed as (
+    update public.reminder_settings set enabled = false where unsubscribe_token = token returning 1
+  )
+  select exists (select 1 from changed);
+$$;
+
+revoke execute on function public.unsubscribe_reminders(uuid) from public;
+grant execute on function public.unsubscribe_reminders(uuid) to anon, authenticated;
+
+-- Everyone whose reminder hour has come (or passed within 2 hours, if a run
+-- was missed) and who hasn't been reminded today: mark them, and return those
+-- with cards waiting. "Waiting" matches the app's اليوم page: due cards in
+-- active projects, up to what's left of the daily limit. No reminder during
+-- a vacation or before the email is confirmed.
+create or replace function public.claim_due_reminders()
+returns table (user_id uuid, email text, name text, due integer, unsubscribe_token uuid)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+-- The output columns share names with table columns: a bare name means the column.
+#variable_conflict use_column
+begin
+  return query
+  with ready as (
+    select r.user_id, (now() at time zone r.time_zone)::date as local_day
+    from public.reminder_settings r
+    where r.enabled
+      and extract(hour from now() at time zone r.time_zone)::int between r.hour and r.hour + 2
+      and (r.last_sent_on is null or r.last_sent_on < (now() at time zone r.time_zone)::date)
+  ),
+  claimed as (
+    update public.reminder_settings r
+      set last_sent_on = ready.local_day
+      from ready
+      where r.user_id = ready.user_id
+      returning r.user_id, ready.local_day, r.unsubscribe_token
+  ),
+  counted as (
+    select
+      c.user_id,
+      c.unsubscribe_token,
+      u.email::text as email,
+      nullif(btrim(u.raw_user_meta_data ->> 'name'), '') as name,
+      (select count(*) from public.cards card
+         join public.projects p on p.id = card.project_id
+         where card.user_id = c.user_id and not p.archived and card.next_review_date <= c.local_day)::int as due_total,
+      (select count(distinct log.card_id) from public.review_log log
+         where log.user_id = c.user_id and log.date = c.local_day)::int as reviewed_today,
+      -- Missing: the default 30. JSON null: no limit.
+      case
+        when not (u.raw_user_meta_data ? 'daily_review_limit') then 30
+        when jsonb_typeof(u.raw_user_meta_data -> 'daily_review_limit') = 'number' then (u.raw_user_meta_data ->> 'daily_review_limit')::int
+        else null
+      end as daily_limit
+    from claimed c
+    join auth.users u on u.id = c.user_id
+    where u.email_confirmed_at is not null
+      and not exists (
+        select 1 from public.vacations v
+        where v.user_id = c.user_id and v.start_date <= c.local_day and (v.end_date is null or v.end_date >= c.local_day)
+      )
+  )
+  select counted.user_id, counted.email, counted.name,
+    case when counted.daily_limit is null then counted.due_total
+      else least(counted.due_total, greatest(counted.daily_limit - counted.reviewed_today, 0)) end as due,
+    counted.unsubscribe_token
+  from counted
+  where counted.due_total > 0
+    and (counted.daily_limit is null or counted.daily_limit > counted.reviewed_today);
+end;
+$$;
+
+-- Only the Edge Function (service role) may run it.
+revoke execute on function public.claim_due_reminders() from public, anon, authenticated;
+grant execute on function public.claim_due_reminders() to service_role;

@@ -3,6 +3,7 @@ import {
   getDaysUntilExpiry,
   getEffectivePlan,
   getPlanPrice,
+  describeLimits,
   isAtLimit,
   monthlyEquivalent,
   PLANS,
@@ -21,9 +22,18 @@ describe('plans', () => {
     expect(isAtLimit('free', 'cards', counts)).toBe(true);
   });
 
-  it('has no limits on the paid plans', () => {
-    expect(isAtLimit('plus', 'cards', { ...counts, cards: 10_000 })).toBe(false);
+  it('gives جذور roomy limits, and راسخ none', () => {
+    expect(isAtLimit('plus', 'cards', { ...counts, cards: 599 })).toBe(false);
+    expect(isAtLimit('plus', 'cards', { ...counts, cards: 600 })).toBe(true);
+    expect(isAtLimit('plus', 'shelves', { ...counts, shelves: 7 })).toBe(true);
+    expect(isAtLimit('pro', 'cards', { ...counts, cards: 100_000 })).toBe(false);
     expect(isAtLimit('pro', 'shelves', counts)).toBe(false);
+  });
+
+  it('describes the limits in Arabic', () => {
+    expect(describeLimits('free')).toBe('رف واحد، ومشروعان، و20 بطاقة');
+    expect(describeLimits('plus')).toBe('7 رفوف، و30 مشروعًا، و600 بطاقة');
+    expect(describeLimits('pro')).toBeNull();
   });
 
   it('treats anything unknown as the free plan', () => {

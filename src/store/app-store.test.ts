@@ -191,3 +191,40 @@ describe('shelves', () => {
     expect(store().projects.find((item) => item.id === project.id)?.shelfId).toBeNull();
   });
 });
+
+describe('copying a share', () => {
+  it('adds the shelf, its projects and their cards as new, due from today', () => {
+    const before = { shelves: store().shelves.length, projects: store().projects.length, cards: store().cards.length };
+    const { shelf, projects } = store().importSnapshot(
+      {
+        version: 1,
+        kind: 'shelf',
+        shelfName: 'مراجعات',
+        projects: [
+          {
+            name: 'القدرات',
+            type: 'curriculum',
+            customTypeLabel: null,
+            color: 'teal',
+            cards: [
+              { type: 'qa', content: { question: 'س١', answer: 'ج١' } },
+              { type: 'note', content: { text: 'ملاحظة' } },
+            ],
+          },
+          { name: 'التحصيلي', type: 'curriculum', customTypeLabel: null, color: 'blue', cards: [] },
+        ],
+      },
+      TODAY,
+    );
+
+    expect(store().shelves).toHaveLength(before.shelves + 1);
+    expect(store().projects).toHaveLength(before.projects + 2);
+    expect(projects.every((project) => project.shelfId === shelf?.id)).toBe(true);
+
+    const copied = store().cards.filter((card) => card.projectId === projects[0]!.id);
+    expect(copied).toHaveLength(2);
+    expect(store().cards).toHaveLength(before.cards + 2);
+    expect(copied.map((card) => card.type)).toEqual(['qa', 'note']);
+    expect(copied.every((card) => card.reviewStage === 0 && card.nextReviewDate === TODAY)).toBe(true);
+  });
+});

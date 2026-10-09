@@ -17,6 +17,7 @@ export type Dialog =
   | { kind: 'create-shelf' }
   | { kind: 'ai-cards'; projectId?: string }
   | { kind: 'rename-shelf'; shelfId: string }
+  | { kind: 'share'; target: 'project' | 'shelf'; sourceId: string }
   | {
       kind: 'confirm';
       title: string;

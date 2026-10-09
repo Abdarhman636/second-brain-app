@@ -96,6 +96,14 @@ export function CardsPage() {
           </p>
         </div>
         <div className="page-header__actions">
+          <button
+            type="button"
+            className="btn btn--secondary"
+            onClick={() => openDialog({ kind: 'create-card', ...(filter.projectId ? { projectId: filter.projectId } : {}) })}
+          >
+            <Icon name="plus" size={18} />
+            إضافة بطاقة
+          </button>
           {/* With a project chosen in the filter, review that project; otherwise today's review. */}
           {filter.projectId ? (
             <Link className="btn btn--primary" to={`/projects/${filter.projectId}/review`}>

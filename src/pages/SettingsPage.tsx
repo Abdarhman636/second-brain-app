@@ -1,16 +1,18 @@
 /*
- * Settings: account, appearance, vacation mode, data export, shortcuts.
+ * Settings: account, plan, appearance, daily limit, daily reminder,
+ * vacation mode, data export, shortcuts.
  * Each section is a row: what it is on one side, its controls on the other.
  */
-import { useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { Icon } from '../components/Icon';
+import { DEFAULT_REMINDER_HOUR, fetchReminderSettings, formatHour, ReminderError, saveReminderSettings, type ReminderSettings } from '../data/reminders';
 import { requestEmailChange, signOut, updateDailyLimit, updateIsStudent, updateName } from '../data/session';
 import { formatLongDate, formatRelativeDate, formatShortDate, toISODate } from '../domain/date-utils';
 import { formatCount, getInitial } from '../domain/format';
 import { CARDS_PER_MINUTE, DAILY_LIMIT_OPTIONS, DEFAULT_DAILY_LIMIT } from '../domain/review-scheduler';
 import type { DailyLimit } from '../domain/types';
-import { getDaysUntilExpiry, PLANS, RESOURCE_LABELS } from '../domain/plans';
+import { describeLimits, getDaysUntilExpiry, PLANS } from '../domain/plans';
 import { ACADEMIC_EMAIL_EXAMPLE, isAcademicEmail, isStudentDiscountEligible } from '../domain/students';
 import { getActiveVacation, getVacationDaysLeft, MAX_VACATION_DAYS } from '../domain/vacation';
 import { useDocumentTitle } from '../hooks/use-document-title';
@@ -151,7 +153,6 @@ function PlanSection() {
   const mode = useAppStore((state) => state.mode);
   if (!user) return null;
   const plan = PLANS[user.plan];
-  const { shelves, projects, cards } = plan.limits;
 
   return (
     <SettingsSection id="settings-plan" title="خطتك" description="ما تتيحه خطتك الحالية، وكيف ترتقي.">
@@ -161,9 +162,7 @@ function PlanSection() {
           <strong>{plan.name}</strong>
           {mode === 'demo'
             ? ' · الوضع التجريبي بلا حدود لتجرّب كل شيء'
-            : shelves === null || projects === null || cards === null
-              ? ' · رفوف ومشاريع وبطاقات بلا حدود'
-              : ` · ${RESOURCE_LABELS.shelves.limitText(shelves)}، ${RESOURCE_LABELS.projects.limitText(projects)}، ${RESOURCE_LABELS.cards.limitText(cards)}`}
+            : ` · ${describeLimits(user.plan) ?? 'رفوف ومشاريع وبطاقات بلا حدود'}`}
         </p>
       </div>
       {user.planExpiresAt && user.plan !== 'free' && (
@@ -344,6 +343,85 @@ function VacationSection() {
 
 const limitLabel = (limit: DailyLimit) => (limit === null ? 'بلا حد' : String(limit));
 
+const REMINDER_HOURS = Array.from({ length: 24 }, (_, hour) => hour);
+
+function ReminderSection() {
+  const mode = useAppStore((state) => state.mode);
+  const showToast = useUiStore((state) => state.showToast);
+  const [settings, setSettings] = useState<ReminderSettings | null | undefined>(undefined);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (mode !== 'account') return;
+    let active = true;
+    fetchReminderSettings()
+      .then((loaded) => active && setSettings(loaded))
+      .catch(() => active && setSettings(null));
+    return () => {
+      active = false;
+    };
+  }, [mode]);
+
+  const enabled = settings?.enabled ?? false;
+  const hour = settings?.hour ?? DEFAULT_REMINDER_HOUR;
+
+  const save = async (next: { enabled: boolean; hour: number }) => {
+    setBusy(true);
+    try {
+      setSettings(await saveReminderSettings(next));
+      showToast(next.enabled ? `سنذكّرك كل يوم الساعة ${formatHour(next.hour)} إن كان عندك ما تراجعه` : 'أوقفنا التذكير اليومي');
+    } catch (error) {
+      showToast(error instanceof ReminderError ? error.message : 'تعذّر حفظ التذكير.', 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <SettingsSection
+      id="settings-reminder"
+      title="التذكير اليومي"
+      description="رسالة على بريدك في الساعة التي تختارها، إن كان عندك بطاقات تنتظر المراجعة ذلك اليوم. لا رسائل في أيام الإجازة."
+    >
+      {mode !== 'account' ? (
+        <p className="settings-hint">متاح للحسابات فقط.</p>
+      ) : settings === undefined ? (
+        <p className="settings-hint">جارٍ التحميل…</p>
+      ) : (
+        <>
+          <label className="checkout-confirm reminder-toggle">
+            <input type="checkbox" checked={enabled} disabled={busy} onChange={(event) => void save({ enabled: event.target.checked, hour })} />
+            <span>ذكّرني بالمراجعة كل يوم</span>
+          </label>
+          <div className="field reminder-hour">
+            <label className="field__label" htmlFor="reminder-hour">
+              الساعة
+            </label>
+            <select
+              className="select"
+              id="reminder-hour"
+              value={hour}
+              disabled={busy || !enabled}
+              onChange={(event) => void save({ enabled, hour: Number(event.target.value) })}
+            >
+              {REMINDER_HOURS.map((option) => (
+                <option key={option} value={option}>
+                  {formatHour(option)}
+                </option>
+              ))}
+            </select>
+          </div>
+          {settings && (
+            <p className="settings-hint">
+              بتوقيت <span dir="ltr">{settings.timeZone}</span>. المقترح المساء: يذكّرك فقط إن لم تراجع بعد.
+            </p>
+          )}
+        </>
+      )}
+    </SettingsSection>
+  );
+}
+
 function DailyLimitSection() {
   const limit = useAppStore((state) => (state.user ? state.user.dailyLimit : DEFAULT_DAILY_LIMIT));
   const showToast = useUiStore((state) => state.showToast);
@@ -474,6 +552,7 @@ export function SettingsPage() {
         <PlanSection />
         <AppearanceSection />
         <DailyLimitSection />
+        <ReminderSection />
         <VacationSection />
         <DataSection />
         <ShortcutsSection />

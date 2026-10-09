@@ -1,13 +1,33 @@
 /*
- * Manual payments. A student transfers the price by bank transfer, uploads
- * the receipt, and the request waits until an admin approves it. Approval
- * (on the server) gives the plan for 6 or 12 months.
+ * Manual payments. A student transfers the price by bank transfer, sends a
+ * request, and it waits until an admin reviews it:
+ * pending → reviewing → approved / rejected. Approval (on the server) gives
+ * the plan for 6 or 12 months.
  */
 import type { BillingPeriod, PaidPlanId } from './plans';
 
 /** Only bank transfer for now; kept as a type so other methods can be added. */
 export type PaymentMethod = 'bank';
-export type PaymentStatus = 'pending' | 'approved' | 'rejected';
+export type PaymentStatus = 'pending' | 'reviewing' | 'approved' | 'rejected';
+
+export const PAYMENT_STATUS_ORDER: PaymentStatus[] = ['pending', 'reviewing', 'approved', 'rejected'];
+
+export const PAYMENT_STATUS_LABELS: Record<PaymentStatus, string> = {
+  pending: 'بانتظار المراجعة',
+  reviewing: 'قيد المراجعة',
+  approved: 'مقبول',
+  rejected: 'مرفوض',
+};
+
+/** Still waiting on the admin. A customer has one open request at a time. */
+export function isOpenPaymentStatus(status: PaymentStatus): boolean {
+  return status === 'pending' || status === 'reviewing';
+}
+
+/** Where the admin can move a request. Approved is final (the plan is already given). */
+export function getNextPaymentStatuses(current: PaymentStatus): PaymentStatus[] {
+  return current === 'approved' ? [] : PAYMENT_STATUS_ORDER.filter((status) => status !== current);
+}
 
 export interface PaymentRequest {
   id: string;
@@ -26,13 +46,13 @@ export interface PaymentRequest {
   reference: string;
   /** Name on the sending account, to help find the transfer. */
   payerName: string | null;
-  /** Path of the uploaded receipt in the private "payment-receipts" bucket. */
-  receiptPath: string;
   status: PaymentStatus;
   /** Why a request was rejected, shown to the student. */
   reviewNote: string | null;
   createdAt: string;
   reviewedAt: string | null;
+  /** When the status last changed (the request's creation for older rows). */
+  statusChangedAt: string;
 }
 
 export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
@@ -69,6 +89,3 @@ export function isValidSaudiIban(iban: string): boolean {
 export function formatIban(iban: string): string {
   return iban.replace(/\s+/g, '').replace(/(.{4})/g, '$1 ').trim();
 }
-
-export const RECEIPT_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'application/pdf'];
-export const MAX_RECEIPT_BYTES = 5 * 1024 * 1024;

@@ -9,6 +9,10 @@ describe('AI card suggestions', () => {
     });
     expect(toCardBody({ type: 'definition', front: 'التكرار المتباعد', back: 'مراجعة على فترات تزداد.' }).type).toBe('definition');
     expect(toCardBody({ type: 'note', front: 'ملاحظة', back: '' })).toEqual({ type: 'note', content: { text: 'ملاحظة' } });
+    expect(toCardBody({ type: 'quote', front: 'ثمة خُلقٌ نبيل', back: 'اسمه الترفّع' })).toEqual({
+      type: 'quote',
+      content: { text: 'ثمة خُلقٌ نبيل', continuation: 'اسمه الترفّع' },
+    });
   });
 
   it('keeps only suggestions with their parts filled in', () => {

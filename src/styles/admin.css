@@ -1,0 +1,343 @@
+/* ==========================================================================
+   Admin dashboard: number tiles, two panels, and the user table.
+   ========================================================================== */
+
+.admin-dashboard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.admin-dashboard .page-header {
+  margin-bottom: 0;
+}
+
+.admin-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 4px;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--color-on-brand);
+  background: var(--color-brand);
+}
+
+/* Number tiles */
+.admin-tiles {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  background: var(--color-border);
+  border: 1px solid var(--color-border);
+}
+
+.admin-tile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  padding: var(--space-4) var(--space-5);
+  background: var(--color-surface);
+}
+
+.admin-tile--link {
+  transition: background-color var(--duration-fast);
+}
+
+.admin-tile--link:hover {
+  background: var(--color-field);
+}
+
+.admin-tile__label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.admin-tile__label .icon {
+  color: var(--color-brand-strong);
+}
+
+.admin-tile__value {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xl);
+  font-weight: var(--weight-semibold);
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-tile__note {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--color-text-subtle);
+}
+
+/* Panels */
+.admin-panels {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: 1px;
+  background: var(--color-border);
+  border: 1px solid var(--color-border);
+}
+
+.admin-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+  padding: var(--space-5);
+  background: var(--color-surface);
+}
+
+.admin-panel__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.admin-panel__head h2 {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-bold);
+}
+
+.admin-panel__meta {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-text-subtle);
+}
+
+.admin-panel__note {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+/* Signups per day */
+.admin-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 120px;
+  padding-bottom: 1px;
+  border-bottom: 1px solid var(--color-border-strong);
+}
+
+.admin-bars__bar {
+  display: flex;
+  flex: 1;
+  align-items: flex-end;
+  height: 100%;
+}
+
+.admin-bars__bar span {
+  display: block;
+  width: 100%;
+  min-height: 2px;
+  background: var(--color-brand);
+}
+
+.admin-bars__bar:hover span {
+  background: var(--color-brand-strong);
+}
+
+.admin-bars__axis {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--color-text-subtle);
+}
+
+/* Plan split */
+.admin-split {
+  display: flex;
+  height: 14px;
+  gap: 2px;
+  background: var(--color-surface-sunken);
+}
+
+.admin-split__part {
+  flex-basis: 0;
+  min-width: 0;
+}
+
+.admin-split__part.is-free,
+.admin-split__swatch.is-free {
+  background: var(--color-border-strong);
+}
+
+.admin-split__part.is-plus,
+.admin-split__swatch.is-plus {
+  background: var(--color-brand);
+}
+
+.admin-split__part.is-pro,
+.admin-split__swatch.is-pro {
+  background: var(--color-inverse);
+}
+
+.admin-split__legend {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.admin-split__legend li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.admin-split__legend strong {
+  margin-inline-start: auto;
+  font-family: var(--font-mono);
+}
+
+.admin-split__share {
+  min-width: 3.5em;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-text-subtle);
+  text-align: end;
+}
+
+.admin-split__swatch {
+  width: 10px;
+  height: 10px;
+}
+
+/* Users */
+.admin-users {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.admin-users__toolbar {
+  margin-bottom: 0;
+}
+
+.admin-table {
+  width: 100%;
+  min-width: 52rem;
+  font-size: var(--text-sm);
+  border-collapse: collapse;
+  background: var(--color-surface);
+}
+
+.admin-table th,
+.admin-table td {
+  padding: var(--space-3);
+  text-align: start;
+  vertical-align: top;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.admin-table th {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text-muted);
+  background: var(--color-field);
+}
+
+.admin-table tbody tr:hover {
+  background: var(--color-field);
+}
+
+.admin-num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-user__name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+  font-weight: var(--weight-semibold);
+}
+
+.admin-user__email {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  text-align: start;
+}
+
+.admin-user__meta {
+  display: block;
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  color: var(--color-text-subtle);
+}
+
+.admin-tag {
+  padding: 0 5px;
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-medium);
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border-strong);
+}
+
+.admin-tag.is-on {
+  color: var(--color-on-brand);
+  background: var(--color-brand);
+  border-color: var(--color-brand);
+}
+
+.admin-tag.is-warn {
+  color: var(--color-danger);
+  border-color: var(--color-danger);
+}
+
+.admin-plan {
+  display: inline-block;
+  padding: 1px var(--space-2);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  border: 1px solid var(--color-border-strong);
+}
+
+.admin-plan.is-plus {
+  color: var(--color-on-brand);
+  background: var(--color-brand);
+  border-color: var(--color-brand);
+}
+
+.admin-plan.is-pro {
+  color: var(--color-on-inverse);
+  background: var(--color-inverse);
+  border-color: var(--color-inverse);
+}
+
+/* Plan dialog */
+.admin-plan-choices {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.admin-quick-dates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+  font-size: var(--text-xs);
+}
+
+@media (max-width: 1000px) {
+  .admin-tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-panels {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

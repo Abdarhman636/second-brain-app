@@ -13,10 +13,11 @@
  * The database sets the amount of every payment request from the same
  * prices (public.plan_price in supabase/schema.sql). Keep the two in sync.
  *
- * The free limits are enforced twice: here (to send the user to the pricing
- * page instead of failing) and in the database (supabase/schema.sql), so
- * they can't be bypassed. Keep the two in sync.
+ * The limits (بذرة and جذور; راسخ has none) are enforced twice: here (to send
+ * the user to the pricing page instead of failing) and in the database
+ * (supabase/schema.sql), so they can't be bypassed. Keep the two in sync.
  */
+import { formatCount } from './format';
 
 export type PlanId = 'free' | 'plus' | 'pro';
 export type LimitedResource = 'shelves' | 'projects' | 'cards';
@@ -60,8 +61,9 @@ export const PLANS: Record<PlanId, Plan> = {
   plus: {
     id: 'plus',
     name: 'جذور',
-    tagline: 'لكل موادك وكتبك، بلا حدود.',
-    limits: { shelves: null, projects: null, cards: null },
+    tagline: 'مساحة واسعة لكل موادك وكتبك.',
+    // Room for a year of study; راسخ is for those who need more.
+    limits: { shelves: 7, projects: 30, cards: 600 },
     aiCardsPerMonth: 0,
     price: { half: 49, year: 79 },
     studentPrice: { half: 29, year: 49 },
@@ -87,10 +89,17 @@ export const PLANS: Record<PlanId, Plan> = {
 export const PLAN_ORDER: readonly PlanId[] = ['free', 'plus', 'pro'];
 
 export const RESOURCE_LABELS: Record<LimitedResource, { more: string; limitText: (limit: number) => string }> = {
-  shelves: { more: 'رفوفًا أخرى', limitText: (limit) => (limit === 1 ? 'رف واحد' : `${limit} رفوف`) },
-  projects: { more: 'مشاريع أخرى', limitText: (limit) => (limit === 2 ? 'مشروعان' : `${limit} مشاريع`) },
-  cards: { more: 'بطاقات أخرى', limitText: (limit) => `${limit} بطاقة` },
+  shelves: { more: 'رفوفًا أخرى', limitText: (limit) => formatCount(limit, 'shelves') },
+  projects: { more: 'مشاريع أخرى', limitText: (limit) => formatCount(limit, 'projects') },
+  cards: { more: 'بطاقات أخرى', limitText: (limit) => formatCount(limit, 'cards') },
 };
+
+/** The plan's limits in one line, e.g. "7 رفوف، و30 مشروعًا، و600 بطاقة"; null when it has none. */
+export function describeLimits(planId: PlanId): string | null {
+  const { shelves, projects, cards } = PLANS[planId].limits;
+  if (shelves === null || projects === null || cards === null) return null;
+  return `${RESOURCE_LABELS.shelves.limitText(shelves)}، و${RESOURCE_LABELS.projects.limitText(projects)}، و${RESOURCE_LABELS.cards.limitText(cards)}`;
+}
 
 export function toPlanId(value: unknown): PlanId {
   return isPaidPlan(value) ? value : 'free';
@@ -134,7 +143,8 @@ export function monthlyEquivalent(price: Record<BillingPeriod, number>, period: 
   return Math.round((price[period] / PERIOD_MONTHS[period]) * 100) / 100;
 }
 
-export const FOUNDER_SEATS = 100;
+/** Keep in sync with founder_status() and prepare_payment_request() in supabase/schema.sql. */
+export const FOUNDER_SEATS = 30;
 
 /** Who is paying: a student on a university email, and/or a founder. */
 export interface PriceFor {

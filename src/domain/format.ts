@@ -109,6 +109,24 @@ const COUNT_FORMS = {
     many: '{n} مرحلة',
     other: '{n} مرحلة',
   },
+  // Genitive, as in "منذ دقيقتين" / "منذ خمس دقائق"
+  minutesAgo: {
+    zero: '{n} دقيقة',
+    one: 'دقيقة',
+    two: 'دقيقتين',
+    few: '{n} دقائق',
+    many: '{n} دقيقة',
+    other: '{n} دقيقة',
+  },
+  // Genitive, as in "منذ ساعتين" / "منذ ثلاث ساعات"
+  hours: {
+    zero: '{n} ساعة',
+    one: 'ساعة',
+    two: 'ساعتين',
+    few: '{n} ساعات',
+    many: '{n} ساعة',
+    other: '{n} ساعة',
+  },
   // Genitive, as in "بعد يومين" / "منذ ثلاثة أيام"
   days: {
     zero: '{n} يوم',

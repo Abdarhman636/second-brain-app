@@ -2,7 +2,7 @@ import { useCallback, useEffect } from 'react';
 import { saveTheme, type Theme } from '../lib/theme-storage';
 import { useUiStore } from '../store/ui-store';
 
-const THEME_COLORS: Record<Theme, string> = { light: '#e6e6e4', dark: '#0f0f0f' };
+const THEME_COLORS: Record<Theme, string> = { light: '#e6e6e4', dark: '#080808' };
 
 /** Applies the theme to <html data-theme> and remembers it on this device. */
 export function useApplyTheme() {

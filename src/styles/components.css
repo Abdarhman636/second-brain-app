@@ -431,7 +431,7 @@
 
 .modal__body {
   min-height: 0;
-  padding: var(--space-6) var(--space-6) 0;
+  padding: var(--space-6) var(--space-6);
   overflow-y: auto;
   overscroll-behavior: contain;
 }

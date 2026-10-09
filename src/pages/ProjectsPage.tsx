@@ -8,6 +8,7 @@ import { ActionMenu } from '../components/ActionMenu';
 import { padNumber } from '../components/dashboard';
 import { Icon } from '../components/Icon';
 import { accentProps, EmptyState, ProjectBadge } from '../components/ui';
+import { WelcomeStart } from '../components/Welcome';
 import { formatCount } from '../domain/format';
 import { getProjectTypeLabel } from '../domain/project-types';
 import { getProjectStats, PROJECT_SORT_OPTIONS, sortProjects, type ProjectSort, type ProjectStats } from '../domain/projects';
@@ -95,6 +96,7 @@ function useShelfMenu(shelf: Shelf) {
 
   return [
     { label: 'إعادة تسمية الرف', icon: 'edit' as const, onSelect: () => openDialog({ kind: 'rename-shelf', shelfId: shelf.id }) },
+    { label: 'مشاركة الرف', icon: 'share' as const, onSelect: () => openDialog({ kind: 'share', target: 'shelf', sourceId: shelf.id }) },
     { label: 'حذف الرف', icon: 'trash' as const, onSelect: () => void remove(), danger: true },
   ];
 }
@@ -168,16 +170,7 @@ export function ProjectsPage() {
   if (!projects.length && !shelves.length) {
     return (
       <div className="page">
-        <EmptyState
-          icon="folderPlus"
-          title="ابدأ أول مشروع لك"
-          message="اجمع المعلومات التي تريد تذكرها، ونرتب لك مراجعتها مع الوقت."
-          actions={[
-            { label: 'إنشاء مشروع', onClick: () => openDialog({ kind: 'create-project' }) },
-            { label: 'إنشاء رف', onClick: () => openDialog({ kind: 'create-shelf' }), variant: 'secondary' },
-          ]}
-          headingLevel={1}
-        />
+        <WelcomeStart />
       </div>
     );
   }

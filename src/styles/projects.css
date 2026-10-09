@@ -605,3 +605,175 @@
   font-size: var(--text-xs);
   color: var(--color-text-subtle);
 }
+
+/* ==========================================================================
+   Sharing: the share dialog and the shared page (/s/:id)
+   ========================================================================== */
+
+.share-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.share-dialog__facts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.share-dialog__facts li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.share-dialog__facts svg {
+  flex: none;
+}
+
+.share-link .copy-field__value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.share-dialog__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* ---------- The shared page ---------- */
+
+.share-cta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
+  padding: var(--space-5);
+  background: var(--color-brand-soft);
+  border: 1px solid var(--color-brand-line);
+}
+
+.share-cta__text {
+  flex: 1 1 22rem;
+  font-size: var(--text-base);
+  line-height: 1.7;
+}
+
+.share-cta__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.share-projects {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.share-project {
+  padding: var(--space-5);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-top: 3px solid var(--accent);
+}
+
+.share-project__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.share-project__badge {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  background: var(--accent);
+  border-radius: 50%;
+}
+
+.share-project__name {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+}
+
+.share-project__meta {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.share-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+  gap: var(--space-3);
+}
+
+.share-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  background: var(--color-field);
+  border: 1px solid var(--color-border);
+}
+
+.share-card__type {
+  font-size: var(--text-2xs);
+  color: var(--color-text-subtle);
+}
+
+.share-card__front {
+  font-weight: var(--weight-semibold);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+}
+
+.share-card__back {
+  padding-top: var(--space-2);
+  font-size: var(--text-sm);
+  line-height: 1.7;
+  color: var(--color-text-muted);
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+  border-top: 1px dashed var(--color-border);
+}
+
+.share-project__more {
+  margin-top: var(--space-3);
+  font-size: var(--text-sm);
+}
+
+.share-about {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-top: var(--space-8);
+  padding-top: var(--space-5);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  border-top: 1px solid var(--color-border);
+}
+
+@media (max-width: 560px) {
+  .share-cta,
+  .share-project {
+    padding: var(--space-4);
+  }
+
+  .share-cta__actions,
+  .share-cta__actions .btn {
+    width: 100%;
+  }
+}

@@ -11,8 +11,8 @@ export const DEVELOPER = {
 } as const;
 
 /*
- * Manual payments: the student makes a bank transfer, uploads the receipt,
- * and an admin activates the plan (see /checkout and /admin/payments).
+ * Manual payments: the student makes a bank transfer, sends a request, and
+ * an admin activates the plan (see /checkout and the admin dashboard).
  *
  * These details are shown publicly on the checkout page.
  */
@@ -33,3 +33,10 @@ export const PAYMENT = {
   /** How long approval usually takes, as promised to students. */
   approvalTime: 'خلال 24 ساعة',
 } as const;
+
+/**
+ * The admin dashboard's address. Not "/admin", which everyone tries first.
+ * Hiding it is only a courtesy: the data is protected by the database's admin
+ * checks. Keep in sync with ADMIN_PATH in supabase/functions/payment-emails.
+ */
+export const ADMIN_PATH = '/admrusskh';

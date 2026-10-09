@@ -106,6 +106,7 @@ export function ProjectDetailsPage() {
             label="خيارات المشروع"
             items={[
               { label: 'تعديل المشروع', icon: 'edit', onSelect: () => openDialog({ kind: 'edit-project', projectId: project.id }) },
+              { label: 'مشاركة المشروع', icon: 'share', onSelect: () => openDialog({ kind: 'share', target: 'project', sourceId: project.id }) },
               project.archived
                 ? { label: 'إلغاء الأرشفة', icon: 'unarchive', onSelect: toggleArchive }
                 : { label: 'أرشفة المشروع', icon: 'archive', onSelect: toggleArchive },
@@ -147,6 +148,12 @@ export function ProjectDetailsPage() {
               <Icon name="sparkle" size={18} />
               بطاقات بالذكاء الاصطناعي
             </button>
+            {cardCount > 0 && (
+              <button type="button" className="btn btn--secondary" onClick={() => openDialog({ kind: 'share', target: 'project', sourceId: project.id })}>
+                <Icon name="share" size={18} />
+                مشاركة
+              </button>
+            )}
             {cardCount > 0 && (
               <p className="project-hero__hint">
                 {dueCount > 0

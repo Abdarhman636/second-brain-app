@@ -9,6 +9,7 @@ import { Icon, type IconName } from '../components/Icon';
 import { signOut } from '../data/session';
 import { PAYMENT } from '../config';
 import {
+  describeLimits,
   FOUNDER_SEATS,
   getPlanPrice,
   getPriceList,
@@ -38,7 +39,7 @@ const RECOMMENDED: PlanId = 'plus';
 
 const FEATURES: Record<PlanId, { icon: IconName; text: string }[]> = {
   free: [
-    { icon: 'shelf', text: 'رف واحد، ومشروعان، و20 بطاقة' },
+    { icon: 'shelf', text: describeLimits('free')! },
     { icon: 'review', text: 'المراجعة المتباعدة كاملة' },
     { icon: 'flame', text: 'السلسلة اليومية ووضع الإجازة' },
     { icon: 'chart', text: 'إحصائيات تقدّمك' },
@@ -46,12 +47,13 @@ const FEATURES: Record<PlanId, { icon: IconName; text: string }[]> = {
   ],
   plus: [
     { icon: 'check', text: 'كل ما في بذرة' },
-    { icon: 'shelf', text: 'رفوف بلا حدود' },
-    { icon: 'projects', text: 'مشاريع بلا حدود' },
-    { icon: 'cards', text: 'بطاقات بلا حدود' },
+    { icon: 'shelf', text: `حتى ${RESOURCE_LABELS.shelves.limitText(PLANS.plus.limits.shelves!)}` },
+    { icon: 'projects', text: `حتى ${RESOURCE_LABELS.projects.limitText(PLANS.plus.limits.projects!)}` },
+    { icon: 'cards', text: `حتى ${RESOURCE_LABELS.cards.limitText(PLANS.plus.limits.cards!)}` },
   ],
   pro: [
     { icon: 'check', text: 'كل ما في جذور' },
+    { icon: 'shelf', text: 'رفوف ومشاريع وبطاقات بلا حدود' },
     { icon: 'text', text: 'بطاقات بالذكاء الاصطناعي من نص تلصقه' },
     { icon: 'image', text: 'أو من صورة لصفحة كتاب أو سبورة' },
     { icon: 'sparkle', text: `حتى ${PLANS.pro.aiCardsPerMonth} بطاقة ذكية في الشهر` },
@@ -66,8 +68,8 @@ const FAQ: { question: string; answer: string }[] = [
     answer: 'نعم، بلا بطاقة دفع وبلا مدة. تكفيك لتجرّب رسوخ على مادة أو كتاب، وتبني عادة المراجعة اليومية.',
   },
   {
-    question: 'ماذا يحدث لبطاقاتي إذا وصلت لحد الخطة المجانية؟',
-    answer: 'لا يضيع شيء. تبقى كل بطاقاتك وتواصل مراجعتها كالمعتاد، لكن إضافة الجديد تحتاج خطة أعلى.',
+    question: 'ماذا يحدث لبطاقاتي إذا وصلت لحد خطتي؟',
+    answer: 'لا يضيع شيء. تبقى كل بطاقاتك وتواصل مراجعتها كالمعتاد، لكن إضافة الجديد تحتاج خطة أعلى. خطة راسخ بلا حدود.',
   },
   {
     question: 'كيف تعمل البطاقات الذكية في خطة راسخ؟',
@@ -84,7 +86,7 @@ const FAQ: { question: string; answer: string }[] = [
   },
   {
     question: 'كيف أدفع؟',
-    answer: `بتحويل بنكي إلى حسابنا في ${PAYMENT.bank.name}، ثم ترفع صورة الإيصال في التطبيق. نراجع التحويل ونفعّل اشتراكك ${PAYMENT.approvalTime} غالبًا.`,
+    answer: `بتحويل بنكي إلى حسابنا في ${PAYMENT.bank.name}، ثم ترسل الطلب من التطبيق. نراجع التحويل ونفعّل اشتراكك ${PAYMENT.approvalTime} غالبًا، ونرسل لك كل تحديث على بريدك.`,
   },
   {
     question: 'هل يتجدد الاشتراك تلقائيًا؟',
@@ -104,26 +106,32 @@ function isLimitedResource(value: string | null): value is LimitedResource {
 
 /** Why the user was sent here, when they hit a limit. */
 function LimitBanner({ reason }: { reason: LimitedResource }) {
-  const limit = PLANS.free.limits[reason] ?? 0;
+  const planId = useAppStore((state) => (state.mode === 'account' ? (state.user?.plan ?? 'free') : 'free'));
+  const plan = PLANS[planId];
+  const limit = plan.limits[reason] ?? 0;
+  const next = planId === 'free' ? 'اختر خطة أعلى' : PLANS.pro.available ? 'انتقل إلى خطة راسخ' : 'انتظر خطة راسخ (بلا حدود)، قريبًا';
   return (
     <div className="pricing-banner" role="status">
       <Icon name="info" size={20} />
       <p>
-        <strong>وصلت لحد خطة بذرة: {RESOURCE_LABELS[reason].limitText(limit)}.</strong> كل ما أضفته محفوظ وتواصل مراجعته. لتضيف{' '}
-        {RESOURCE_LABELS[reason].more}، اختر خطة أعلى.
+        <strong>
+          وصلت لحد خطة {plan.name}: {RESOURCE_LABELS[reason].limitText(limit)}.
+        </strong>{' '}
+        كل ما أضفته محفوظ وتواصل مراجعته. لتضيف {RESOURCE_LABELS[reason].more}، {next}.
       </p>
     </div>
   );
 }
 
-/** A free account's usage of each limit. */
+/** The account's usage of each limit, on a plan that has limits. */
 function Usage() {
   const user = useAppStore((state) => state.user);
   const mode = useAppStore((state) => state.mode);
   const shelves = useAppStore((state) => state.shelves);
   const projects = useAppStore((state) => state.projects);
   const cards = useAppStore((state) => state.cards);
-  if (mode !== 'account' || !user || user.plan !== 'free') return null;
+  if (mode !== 'account' || !user || !describeLimits(user.plan)) return null;
+  const plan = PLANS[user.plan];
 
   const counts = countResources({ user, mode, shelves, projects, cards });
   const rows: { resource: LimitedResource; label: string }[] = [
@@ -133,9 +141,9 @@ function Usage() {
   ];
 
   return (
-    <dl className="pricing-usage" aria-label="استخدامك لخطة بذرة">
+    <dl className="pricing-usage" aria-label={`استخدامك لخطة ${plan.name}`}>
       {rows.map(({ resource, label }) => {
-        const limit = PLANS.free.limits[resource] ?? 0;
+        const limit = plan.limits[resource] ?? 0;
         const used = counts[resource];
         return (
           <div key={resource} className={`pricing-usage__item${used >= limit ? ' is-full' : ''}`}>

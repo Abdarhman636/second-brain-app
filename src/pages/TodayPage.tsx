@@ -8,7 +8,8 @@ import { useMemo } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { CellHead, HardestProject, KnowledgeJourney, padNumber, StreakCard, UpcomingReviews } from '../components/dashboard';
 import { Icon } from '../components/Icon';
-import { EmptyState, Progress } from '../components/ui';
+import { Progress } from '../components/ui';
+import { WelcomeStart } from '../components/Welcome';
 import { formatLongDate, formatRelativeDate } from '../domain/date-utils';
 import { formatCount } from '../domain/format';
 import { CARDS_PER_MINUTE } from '../domain/review-scheduler';
@@ -21,7 +22,6 @@ import { useToday } from '../hooks/use-today';
 import { useVacationActions } from '../hooks/use-vacation-actions';
 import { useAppStore } from '../store/app-store';
 import { getUpcomingSchedule, isReviewSessionActive, type ReviewSummary } from '../store/selectors';
-import { useUiStore } from '../store/ui-store';
 
 const UPCOMING_DAYS = 3;
 
@@ -130,7 +130,6 @@ export function TodayPage() {
   useDocumentTitle('اليوم');
   const today = useToday();
   const greeting = useGreeting();
-  const { openDialog } = useUiStore.getState();
   const projects = useAppStore((state) => state.projects);
   const cards = useAppStore((state) => state.cards);
   const reviewLog = useAppStore((state) => state.reviewLog);
@@ -155,13 +154,7 @@ export function TodayPage() {
   if (!projects.length) {
     return (
       <div className="page">
-        <EmptyState
-          icon="folderPlus"
-          title="ابدأ أول مشروع لك"
-          message="اجمع المعلومات التي تريد تذكرها، ونرتب لك مراجعتها مع الوقت."
-          actions={[{ label: 'إنشاء مشروع', onClick: () => openDialog({ kind: 'create-project' }) }]}
-          headingLevel={1}
-        />
+        <WelcomeStart />
       </div>
     );
   }

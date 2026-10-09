@@ -11,14 +11,13 @@ import { Icon } from '../components/Icon';
 import { EmptyState } from '../components/ui';
 import { PAYMENT } from '../config';
 import {
-  cancelPaymentRequest,
   listMyPaymentRequests,
   PaymentError,
   refreshSubscription,
   submitPaymentRequest,
 } from '../data/payments';
 import { formatShortDate, toISODate } from '../domain/date-utils';
-import { createPaymentReference, formatIban, getPaymentMethodLabel, type PaymentRequest } from '../domain/payments';
+import { createPaymentReference, formatIban, getPaymentMethodLabel, isOpenPaymentStatus, type PaymentRequest } from '../domain/payments';
 import {
   getPlanPrice,
   isBillingPeriod,
@@ -97,9 +96,7 @@ function TransferInstructions({ iban, amount, reference }: { iban: string; amoun
         <li>
           إن وجدت خانة <strong>«ملاحظة»</strong> أو «الغرض»، اكتب فيها رمز طلبك. وإن لم تجدها فلا بأس.
         </li>
-        <li>
-          أكّد التحويل، ثم <strong>خذ لقطة شاشة</strong> لصفحة نجاح التحويل (الإيصال).
-        </li>
+        <li>أكّد التحويل، ثم ارجع هنا وأرسل الطلب.</li>
       </ol>
 
       <div className="copy-fields">
@@ -126,7 +123,7 @@ function TransferInstructions({ iban, amount, reference }: { iban: string; amoun
 }
 
 /** After sending: what happens next, and the request's status. */
-function RequestStatus({ request, onCancel, onRefresh }: { request: PaymentRequest; onCancel: () => void; onRefresh: () => void }) {
+function RequestStatus({ request, onRefresh }: { request: PaymentRequest; onRefresh: () => void }) {
   const plan = PLANS[request.plan];
   return (
     <section className="checkout-status" role="status">
@@ -136,7 +133,7 @@ function RequestStatus({ request, onCancel, onRefresh }: { request: PaymentReque
       <h2 className="checkout-status__title">استلمنا طلبك، شكرًا لك!</h2>
       <p>
         سنتأكد من وصول التحويل ونفعّل اشتراكك في <strong>{plan.name}</strong> لمدة {PERIOD_LABELS[request.period]}{' '}
-        {PAYMENT.approvalTime} غالبًا. لا تحتاج أن تفعل شيئًا آخر.
+        {PAYMENT.approvalTime} غالبًا، ونرسل لك رسالة على بريدك عند كل تحديث. لا تحتاج أن تفعل شيئًا آخر.
       </p>
 
       <dl className="checkout-status__details">
@@ -159,8 +156,8 @@ function RequestStatus({ request, onCancel, onRefresh }: { request: PaymentReque
       </dl>
 
       <ol className="checkout-next" aria-label="ماذا بعد؟">
-        <li className="is-done">أرسلت الطلب والإيصال</li>
-        <li className="is-current">نراجع التحويل</li>
+        <li className="is-done">أرسلت الطلب</li>
+        <li className="is-current">{request.status === 'reviewing' ? 'نراجع التحويل الآن' : 'نراجع التحويل'}</li>
         <li>نفعّل اشتراكك، وتجده في «الإعدادات»</li>
       </ol>
 
@@ -169,12 +166,10 @@ function RequestStatus({ request, onCancel, onRefresh }: { request: PaymentReque
           <Icon name="retry" size={16} />
           تحقّق من الحالة
         </button>
-        <Link className="btn btn--secondary" to="/">
-          العودة إلى اليوم
+        <Link className="btn btn--secondary" to="/orders">
+          <Icon name="receipt" size={16} />
+          تابع طلباتك
         </Link>
-        <button type="button" className="btn btn--ghost" onClick={onCancel}>
-          إلغاء الطلب
-        </button>
       </div>
       {PAYMENT.whatsapp && (
         <p className="checkout-hint">
@@ -193,14 +188,13 @@ export function CheckoutPage() {
   const [searchParams] = useSearchParams();
   const user = useAppStore((state) => state.user);
   const mode = useAppStore((state) => state.mode);
-  const { showToast, confirm } = useUiStore.getState();
+  const { showToast } = useUiStore.getState();
 
   const requestedPlan = searchParams.get('plan');
   const requestedPeriod = searchParams.get('period');
   const [planId, setPlanId] = useState<PaidPlanId>(isPaidPlan(requestedPlan) && PLANS[requestedPlan].available ? requestedPlan : 'plus');
   const [period, setPeriod] = useState<BillingPeriod>(isBillingPeriod(requestedPeriod) ? requestedPeriod : 'year');
   const [reference] = useState(() => createPaymentReference());
-  const [receipt, setReceipt] = useState<File | null>(null);
   const [payerName, setPayerName] = useState('');
   const [confirmed, setConfirmed] = useState(false);
   const [error, setError] = useState('');
@@ -240,8 +234,8 @@ export function CheckoutPage() {
   const amount = getPlanPrice(plan, period, buyer) ?? 0;
   const priceLabel = [founder && 'سعر المؤسسين', student && 'سعر الطالب'].filter(Boolean).join(' + ');
   const iban = PAYMENT.bank.iban;
-  const pending = requests?.find((request) => request.status === 'pending');
-  const lastReviewed = requests?.find((request) => request.status !== 'pending');
+  const pending = requests?.find((request) => isOpenPaymentStatus(request.status));
+  const lastReviewed = requests?.find((request) => !isOpenPaymentStatus(request.status));
   const hasActivePlan = user.plan !== 'free' && user.planExpiresAt;
 
   const refresh = async () => {
@@ -251,30 +245,13 @@ export function CheckoutPage() {
     else showToast('طلبك ما زال قيد المراجعة');
   };
 
-  const cancel = async (request: PaymentRequest) => {
-    const ok = await confirm({
-      title: 'إلغاء الطلب؟',
-      message: 'سيُحذف طلبك وصورة الإيصال. إن كنت حوّلت المبلغ فعلًا، فلا تلغِ الطلب: انتظر حتى نراجعه.',
-      confirmLabel: 'إلغاء الطلب',
-    });
-    if (!ok) return;
-    try {
-      await cancelPaymentRequest(request);
-      showToast('أُلغي الطلب');
-      await load();
-    } catch (cancelError) {
-      showToast(cancelError instanceof PaymentError ? cancelError.message : 'تعذّر إلغاء الطلب', 'error');
-    }
-  };
-
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!receipt) return setError('ارفع صورة الإيصال أولًا (لقطة شاشة لصفحة نجاح التحويل).');
     if (!confirmed) return setError(`أكّد أنك حوّلت ${amount} ر.س.`);
     setError('');
     setBusy(true);
     try {
-      const request = await submitPaymentRequest({ plan: planId, period, method: 'bank', reference, payerName, receipt });
+      const request = await submitPaymentRequest({ plan: planId, period, method: 'bank', reference, payerName });
       setRequests((current) => [request, ...(current ?? [])]);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (submitError) {
@@ -300,7 +277,7 @@ export function CheckoutPage() {
       </header>
 
       {pending ? (
-        <RequestStatus request={pending} onCancel={() => void cancel(pending)} onRefresh={() => void refresh()} />
+        <RequestStatus request={pending} onRefresh={() => void refresh()} />
       ) : (
         <>
           {hasActivePlan && (
@@ -397,24 +374,7 @@ export function CheckoutPage() {
                 <TransferInstructions iban={iban} amount={amount} reference={reference} />
               </Step>
 
-              <Step number={3} title="ارفع الإيصال وأرسل الطلب">
-                <div className="field">
-                  <span className="field__label">صورة الإيصال</span>
-                  <label className={`receipt-picker${receipt ? ' has-file' : ''}`}>
-                    <input
-                      type="file"
-                      accept="image/png,image/jpeg,image/webp,application/pdf"
-                      onChange={(event) => {
-                        setReceipt(event.target.files?.[0] ?? null);
-                        setError('');
-                      }}
-                    />
-                    <Icon name={receipt ? 'check' : 'upload'} size={20} />
-                    <span>{receipt ? receipt.name : 'اضغط لاختيار لقطة الشاشة من جوالك أو جهازك'}</span>
-                  </label>
-                  <p className="field__hint">صورة أو PDF، حتى 5 ميجابايت.</p>
-                </div>
-
+              <Step number={3} title="أرسل الطلب">
                 <div className="field">
                   <label className="field__label" htmlFor="checkout-payer">
                     اسم صاحب الحساب الذي حوّلت منه <span className="field__optional">(اختياري)</span>
@@ -454,7 +414,10 @@ export function CheckoutPage() {
                 <button type="submit" className="btn btn--primary btn--lg btn--block" disabled={busy} aria-busy={busy}>
                   {busy ? 'جارٍ الإرسال…' : 'أرسل الطلب'}
                 </button>
-                <p className="checkout-hint">نفعّل اشتراكك {PAYMENT.approvalTime} غالبًا بعد التأكد من وصول التحويل. الاشتراك لا يتجدد تلقائيًا.</p>
+                <p className="checkout-hint">
+                  نرسل لك تفاصيل طلبك على بريدك، ثم نفعّل اشتراكك {PAYMENT.approvalTime} غالبًا بعد التأكد من وصول التحويل. الاشتراك لا يتجدد
+                  تلقائيًا.
+                </p>
               </Step>
             </form>
           )}

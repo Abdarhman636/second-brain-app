@@ -6,7 +6,7 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router';
 import { Icon, type IconName } from '../components/Icon';
-import { ShelfDiagram } from '../components/Welcome';
+import { StartSteps } from '../components/Welcome';
 import { useDocumentTitle } from '../hooks/use-document-title';
 import { useAppStore } from '../store/app-store';
 
@@ -86,7 +86,7 @@ const SECTIONS: Section[] = [
     title: 'الرفوف والمشاريع',
     body: (
       <>
-        <ShelfDiagram />
+        <StartSteps />
         <p>
           <strong>المشروع</strong> يجمع بطاقات موضوع واحد: كتاب، أو مادة جامعية، أو بودكاست. ولكل مشروع لون ونوع تختارهما.
         </p>

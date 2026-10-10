@@ -1,11 +1,18 @@
 # Rusookh on Apache hosting (Hostinger). Vite copies this file into dist/.
 
+# The install manifest (home-screen app) must be served as a manifest.
+AddType application/manifest+json .webmanifest
+
 RewriteEngine On
 
 # Always HTTPS, and rsookh.com without "www".
 RewriteCond %{HTTPS} off [OR]
 RewriteCond %{HTTP_HOST} ^www\. [NC]
 RewriteRule ^ https://rsookh.com%{REQUEST_URI} [L,R=301]
+
+# A missing built file is a real 404, never the page: a stylesheet answered
+# with HTML leaves the site unstyled instead of showing what's wrong.
+RewriteRule ^assets/ - [L]
 
 # A single-page app: any address that isn't a real file (e.g. /projects,
 # /s/abc123, /reset-password) opens index.html, and the app shows the page.

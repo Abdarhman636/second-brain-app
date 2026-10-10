@@ -86,6 +86,25 @@ function SidebarUser({ onNavigate }: { onNavigate: () => void }) {
   );
 }
 
+/** Demo mode: a clear way out, to an account that keeps what you add. */
+function SidebarDemo({ onNavigate, toSignup }: { onNavigate: () => void; toSignup: () => void }) {
+  const leave = async () => {
+    onNavigate();
+    await endAccountSession();
+    toSignup();
+  };
+  return (
+    <div className="sidebar-demo" role="note">
+      <p className="sidebar-demo__title">أنت في الوضع التجريبي</p>
+      <p className="sidebar-demo__text">ما تضيفه هنا لا يُحفظ. أنشئ حسابًا مجانيًا لتحتفظ ببطاقاتك.</p>
+      <button type="button" className="btn btn--primary btn--block sidebar-demo__button" onClick={() => void leave()}>
+        <Icon name="signOut" size={16} />
+        الخروج من الوضع التجريبي
+      </button>
+    </div>
+  );
+}
+
 /** The plan: for free accounts, how much is used and a way up; for paid ones, the end date (and usage where the plan has limits). */
 function SidebarPlan({ onNavigate }: { onNavigate: () => void }) {
   const user = useAppStore((state) => state.user);
@@ -93,6 +112,8 @@ function SidebarPlan({ onNavigate }: { onNavigate: () => void }) {
   const shelves = useAppStore((state) => state.shelves);
   const projects = useAppStore((state) => state.projects);
   const cards = useAppStore((state) => state.cards);
+  const navigate = useNavigate();
+  if (mode === 'demo') return <SidebarDemo onNavigate={onNavigate} toSignup={() => navigate('/signup')} />;
   if (mode !== 'account' || !user) return null;
   const counts = countResources({ user, mode, shelves, projects, cards });
 

@@ -12,7 +12,8 @@ export interface ReminderSettings {
   timeZone: string;
 }
 
-export const DEFAULT_REMINDER_HOUR = 20;
+/** Everyone is reminded at 8 pm, in their own time zone. */
+export const REMINDER_HOUR = 20;
 
 export class ReminderError extends Error {}
 
@@ -26,8 +27,8 @@ export function getDeviceTimeZone(): string {
 }
 
 /**
- * Turn the reminder on for an account that has no settings yet (at 8 pm in
- * the device's time zone). Existing settings are left alone.
+ * Turn the reminder on for an account that has no settings yet (8 pm in the
+ * device's time zone). Existing settings are left alone.
  */
 export async function ensureReminderSettings(): Promise<void> {
   if (!supabase) return;
@@ -62,9 +63,4 @@ export async function unsubscribeReminders(token: string): Promise<boolean> {
   const { data, error } = await supabase.rpc('unsubscribe_reminders', { token });
   if (error) throw new ReminderError('تعذّر إيقاف التذكير. حاول مرة أخرى.');
   return Boolean(data);
-}
-
-/** "8 م", "6 ص", "12 م" — a whole hour in Arabic, 12-hour style. */
-export function formatHour(hour: number): string {
-  return `${hour % 12 || 12} ${hour < 12 ? 'ص' : 'م'}`;
 }

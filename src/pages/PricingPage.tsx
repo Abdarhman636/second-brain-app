@@ -8,7 +8,9 @@ import { Link, useNavigate, useSearchParams } from 'react-router';
 import { Icon, type IconName } from '../components/Icon';
 import { signOut } from '../data/session';
 import { PAYMENT } from '../config';
+import { formatShortDate, toISODate } from '../domain/date-utils';
 import {
+  comparePlans,
   describeLimits,
   FOUNDER_SEATS,
   getPlanPrice,
@@ -86,7 +88,7 @@ const FAQ: { question: string; answer: string }[] = [
   },
   {
     question: 'كيف أدفع؟',
-    answer: `بتحويل بنكي إلى حسابنا في ${PAYMENT.bank.name}، ثم ترسل الطلب من التطبيق. نراجع التحويل ونفعّل اشتراكك ${PAYMENT.approvalTime} غالبًا، ونرسل لك كل تحديث على بريدك.`,
+    answer: `بتحويل بنكي إلى حسابنا في ${PAYMENT.bank.name}، ثم ترسل الطلب من التطبيق مع صورة الإيصال. نراجع التحويل ونفعّل اشتراكك ${PAYMENT.approvalTime} غالبًا، ونرسل لك كل تحديث على بريدك.`,
   },
   {
     question: 'هل يتجدد الاشتراك تلقائيًا؟',
@@ -196,19 +198,18 @@ function PlanAction({ plan, period }: { plan: Plan; period: BillingPeriod }) {
   const user = useAppStore((state) => state.user);
   const mode = useAppStore((state) => state.mode);
   const navigate = useNavigate();
-  const currentPlan = mode === 'account' ? user?.plan : null;
-
-  // The free plan can't be "bought"; a paid plan can always be renewed (below).
-  if (currentPlan === plan.id && plan.id === 'free') {
-    return (
-      <button type="button" className="btn btn--secondary btn--lg btn--block" disabled>
-        <Icon name="check" size={18} />
-        خطتك الحالية
-      </button>
-    );
-  }
+  const currentPlan = mode === 'account' ? (user?.plan ?? null) : null;
+  const checkout = `/checkout?plan=${plan.id}&period=${period}`;
 
   if (plan.id === 'free') {
+    if (currentPlan === 'free') {
+      return (
+        <button type="button" className="btn btn--secondary btn--lg btn--block" disabled>
+          <Icon name="check" size={18} />
+          خطتك الحالية
+        </button>
+      );
+    }
     if (currentPlan) return null; // On a paid plan already.
     if (mode === 'demo') {
       return (
@@ -239,23 +240,53 @@ function PlanAction({ plan, period }: { plan: Plan; period: BillingPeriod }) {
     );
   }
 
-  const className = `btn btn--lg btn--block ${plan.id === RECOMMENDED ? 'btn--primary' : 'btn--dark'}`;
-  const checkout = `/checkout?plan=${plan.id}&period=${period}`;
   if (mode === 'demo') {
     return (
       <button
         type="button"
-        className={className}
+        className={`btn btn--lg btn--block ${plan.id === RECOMMENDED ? 'btn--primary' : 'btn--dark'}`}
         onClick={() => useUiStore.getState().showToast('الاشتراك يحتاج حسابًا. أنشئ حسابًا مجانيًا من صفحة الدخول أولًا.')}
       >
         اشترك في {plan.name}
       </button>
     );
   }
+
   // Signed out: sign up first, then continue to checkout.
+  if (!user || !currentPlan) {
+    return (
+      <Link className={`btn btn--lg btn--block ${plan.id === RECOMMENDED ? 'btn--primary' : 'btn--dark'}`} to="/signup" state={{ from: checkout }}>
+        اشترك في {plan.name}
+      </Link>
+    );
+  }
+
+  const standing = comparePlans(plan.id, currentPlan);
+  if (standing === 'current') {
+    return (
+      <div className="plan-card__current">
+        <p>
+          <Icon name="check" size={16} />
+          أنت مشترك حاليًا في هذه الباقة
+          {user.planExpiresAt && ` حتى ${formatShortDate(toISODate(new Date(user.planExpiresAt)))}`}.
+        </p>
+        <Link className="btn btn--secondary btn--lg btn--block" to={checkout}>
+          جدّد اشتراكك
+        </Link>
+      </div>
+    );
+  }
+  if (standing === 'downgrade') {
+    return (
+      <button type="button" className="btn btn--secondary btn--lg btn--block" disabled>
+        باقتك الحالية أعلى
+      </button>
+    );
+  }
+  // Free accounts subscribe; paid ones upgrade.
   return (
-    <Link className={className} to={user ? checkout : '/signup'} state={user ? undefined : { from: checkout }}>
-      {currentPlan === plan.id ? 'جدّد اشتراكك' : `اشترك في ${plan.name}`}
+    <Link className={`btn btn--lg btn--block ${currentPlan === 'free' && plan.id !== RECOMMENDED ? 'btn--dark' : 'btn--primary'}`} to={checkout}>
+      {currentPlan === 'free' ? `اشترك في ${plan.name}` : `الترقية إلى ${plan.name}`}
     </Link>
   );
 }
@@ -344,19 +375,23 @@ export function PricingPage() {
       <ul className="plan-grid" role="list">
         {PLAN_ORDER.map((id) => {
           const plan = PLANS[id];
-          const recommended = id === RECOMMENDED;
+          // A subscriber's own plan takes the frame; everyone else sees the plan we recommend.
+          const subscribed = mode === 'account' && user !== null && user.plan !== 'free';
+          const current = subscribed && user.plan === id;
+          const recommended = !subscribed && id === RECOMMENDED;
           return (
-            <li key={id} className={`plan-card plan-card--${id}${recommended ? ' is-recommended' : ''}`}>
+            <li key={id} className={`plan-card plan-card--${id}${current || recommended ? ' is-recommended' : ''}`}>
               <article aria-labelledby={`plan-${id}`}>
                 <header className="plan-card__head">
                   <h2 className="plan-card__name" id={`plan-${id}`}>
                     {plan.name}
                   </h2>
+                  {current && <span className="plan-card__tag">باقتك الحالية</span>}
                   {recommended && <span className="plan-card__tag">موصى بها للطلاب</span>}
                   {id === 'pro' && (
                     <span className="plan-card__tag plan-card__tag--ai">
                       <Icon name="sparkle" size={12} />
-                      {plan.available ? 'ذكاء اصطناعي' : 'قريبًا'}
+                      ذكاء اصطناعي
                     </span>
                   )}
                 </header>

@@ -37,6 +37,12 @@ const PATHS = {
       <path d="m8 12.5 2.5 2.5 4-5" />
     </>
   ),
+  message: (
+    <>
+      <path d="M4 5h16v11H9l-5 4z" />
+      <path d="M8 9h8M8 12h5" />
+    </>
+  ),
   receipt: (
     <>
       <path d="M6 3h12v18l-3-2-3 2-3-2-3 2z" />

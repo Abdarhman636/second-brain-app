@@ -24,7 +24,7 @@ function getSteps(request: PaymentRequest): Step[] {
   const { status } = request;
   const reviewed = status === 'approved' || status === 'rejected';
   return [
-    { label: 'أرسلت الطلب', note: formatDateTime(request.createdAt), state: 'done' },
+    { label: 'أرسلت الطلب والإيصال', note: formatDateTime(request.createdAt), state: 'done' },
     {
       label: status === 'pending' ? 'بانتظار المراجعة' : 'نراجع التحويل',
       note: status === 'pending' ? `نراجع الطلبات ${PAYMENT.approvalTime} غالبًا` : status === 'reviewing' ? 'نراجعه الآن' : undefined,
@@ -90,6 +90,12 @@ function OrderCard({ request }: { request: PaymentRequest }) {
           <dt>طريقة الدفع</dt>
           <dd>{getPaymentMethodLabel(request.method)}</dd>
         </div>
+        {request.note && (
+          <div className="order-card__note">
+            <dt>ملاحظتك</dt>
+            <dd>{request.note}</dd>
+          </div>
+        )}
         <div>
           <dt>آخر تحديث</dt>
           <dd>{formatDateTime(request.statusChangedAt)}</dd>

@@ -3,7 +3,7 @@
  * Functions (Deno), so the mail password stays on the server.
  *
  *   event "created" — the customer just sent a request: email the customer
- *     its details, and the admin a heads-up. Only the request's owner can
+ *     its details, and the admin a heads-up with the receipt attached. Only the request's owner can
  *     ask, and it's sent once per request (payment_requests.admin_notified_at).
  *   event "status"  — the admin changed a request's status: email the
  *     customer where their request stands. Only admins can ask.
@@ -16,6 +16,7 @@
  *
  * Deploy: npx supabase functions deploy payment-emails --project-ref <ref>
  */
+import { Buffer } from 'node:buffer';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { ADMIN_EMAIL, APP_URL, CORS_HEADERS, layout, MAIL_FROM, mailConfigured, reply, transport } from '../_shared/mail.ts';
 
@@ -43,6 +44,8 @@ interface RequestRow {
   founder_price: boolean;
   reference: string;
   payer_name: string | null;
+  note: string | null;
+  receipt_path: string | null;
   status: Status;
   review_note: string | null;
   created_at: string;
@@ -99,11 +102,14 @@ function adminEmail(request: RequestRow, customerName: string | null) {
   const subject = `طلب اشتراك جديد ${request.reference} · ${Number(request.amount)} ر.س`;
   const html = layout({
     title: 'طلب اشتراك جديد',
-    paragraphs: ['وصل طلب تحويل بنكي جديد. تأكد من وصول المبلغ إلى حسابك قبل قبوله.'],
+    paragraphs: [
+      `وصل طلب تحويل بنكي جديد. تأكد من وصول المبلغ إلى حسابك قبل قبوله.${request.receipt_path ? ' الإيصال مرفق.' : ''}`,
+    ],
     rows: [
       ['العميل', customerName ?? '—'],
       ['الإيميل', request.user_email],
       ['اسم المحوِّل', request.payer_name ?? '—'],
+      ...(request.note ? ([['ملاحظة العميل', request.note]] as [string, string][]) : []),
       ...requestRows(request),
     ],
     action: APP_URL ? { label: 'افتح لوحة التحكم', href: `${APP_URL}${ADMIN_PATH}#orders` } : undefined,
@@ -203,8 +209,17 @@ Deno.serve(async (req) => {
 
     const toAdmin = adminEmail(request, customerName);
     const toCustomer = customerEmail(request, customerName, null);
+    const receipt = request.receipt_path ? await admin.storage.from('payment-receipts').download(request.receipt_path) : null;
+    const attachments = receipt?.data
+      ? [
+          {
+            filename: `receipt-${request.reference}.${request.receipt_path!.split('.').pop() ?? 'jpg'}`,
+            content: Buffer.from(await receipt.data.arrayBuffer()),
+          },
+        ]
+      : [];
     const sent = await Promise.allSettled([
-      transport.sendMail({ from, to: ADMIN_EMAIL, replyTo: request.user_email, ...toAdmin }),
+      transport.sendMail({ from, to: ADMIN_EMAIL, replyTo: request.user_email, ...toAdmin, attachments }),
       transport.sendMail({ from, to: request.user_email, replyTo: ADMIN_EMAIL, ...toCustomer }),
     ]);
     const failed = sent.filter((result): result is PromiseRejectedResult => result.status === 'rejected');

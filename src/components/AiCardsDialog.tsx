@@ -16,6 +16,7 @@ import {
 } from '../domain/ai-cards';
 import { getCardType } from '../domain/card-types';
 import { formatCount } from '../domain/format';
+import { PLANS } from '../domain/plans';
 import { ImageFileError, prepareImageFile } from '../lib/image-file';
 import { useToday } from '../hooks/use-today';
 import { useAppStore } from '../store/app-store';
@@ -69,11 +70,11 @@ function Upsell({ onClose }: { onClose: () => void }) {
       <p className="ai-upsell__title">البطاقات الذكية في خطة راسخ</p>
       <p>
         الصق نصًا أو صوّر صفحة، ونقترح عليك بطاقات جاهزة تراجعها قبل حفظها.{' '}
-        {mode === 'demo' ? 'أنشئ حسابًا لتجربتها حين تُطلق.' : 'خطة راسخ تُطلق قريبًا.'}
+        {mode === 'demo' ? 'أنشئ حسابًا، ثم اشترك في راسخ لتجربتها.' : `حتى ${PLANS.pro.aiCardsPerMonth} بطاقة ذكية في الشهر.`}
       </p>
       <div className="form-footer">
-        <Link className="btn btn--primary" to="/pricing" onClick={onClose}>
-          الباقات والأسعار
+        <Link className="btn btn--primary" to={mode === 'account' ? '/checkout?plan=pro&period=year' : '/pricing'} onClick={onClose}>
+          {mode === 'account' ? 'اشترك في راسخ' : 'الباقات والأسعار'}
         </Link>
         <button type="button" className="btn btn--ghost" onClick={onClose}>
           إغلاق

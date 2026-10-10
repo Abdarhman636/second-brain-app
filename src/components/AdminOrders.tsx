@@ -1,11 +1,11 @@
 /*
  * Admin dashboard: every subscription request. Who sent it, when and how
- * long it has waited, and changing its status (with an email to the
- * customer). The database checks the caller is an admin.
+ * long it has waited, the receipt and the customer's note, and changing its
+ * status (with an email to the customer). The database checks the caller is an admin.
  */
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { AdminUser } from '../data/admin';
-import { notifyPayment, PaymentError, setPaymentRequestStatus } from '../data/payments';
+import { getReceiptUrl, notifyPayment, PaymentError, setPaymentRequestStatus } from '../data/payments';
 import { formatDateTime, formatTimeAgo } from '../domain/date-utils';
 import {
   getNextPaymentStatuses,
@@ -30,6 +30,37 @@ const FILTERS: { id: Filter; label: string }[] = [
 const DEFAULT_REJECT_NOTE = 'لم نجد التحويل. تأكد من المبلغ ورقم الطلب في ملاحظة التحويل، ثم أرسل طلبًا جديدًا.';
 // An open request waiting longer than this is flagged.
 const LATE_AFTER_MS = 24 * 60 * 60 * 1000;
+
+/* ---------- Receipt ---------- */
+
+function ReceiptDialog({ request, onClose }: { request: PaymentRequest; onClose: () => void }) {
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    if (!request.receiptPath) return;
+    let active = true;
+    void getReceiptUrl(request.receiptPath).then((signed) => active && setUrl(signed));
+    return () => {
+      active = false;
+    };
+  }, [request.receiptPath]);
+
+  return (
+    <Modal title={`إيصال ${request.reference}`} onClose={onClose}>
+      {!url ? (
+        <p className="page-loading">جارٍ تحميل الإيصال…</p>
+      ) : request.receiptPath?.endsWith('.pdf') ? (
+        <a className="btn btn--secondary" href={url} target="_blank" rel="noopener noreferrer">
+          <Icon name="download" size={16} />
+          فتح الإيصال (PDF)
+        </a>
+      ) : (
+        <a className="admin-order-receipt" href={url} target="_blank" rel="noopener noreferrer" aria-label="فتح الإيصال بالحجم الكامل">
+          <img src={url} alt={`إيصال التحويل ${request.reference}`} />
+        </a>
+      )}
+    </Modal>
+  );
+}
 
 /* ---------- Changing the status ---------- */
 
@@ -137,6 +168,7 @@ export function AdminOrders({ requests, users, onChanged }: { requests: PaymentR
   const [filter, setFilter] = useState<Filter>('open');
   const [query, setQuery] = useState('');
   const [editing, setEditing] = useState<PaymentRequest | null>(null);
+  const [viewing, setViewing] = useState<PaymentRequest | null>(null);
 
   const names = useMemo(() => new Map(users.map((user) => [user.id, user.name])), [users]);
   const customerName = (request: PaymentRequest) => names.get(request.userId) ?? 'بدون اسم';
@@ -232,6 +264,7 @@ export function AdminOrders({ requests, users, onChanged }: { requests: PaymentR
                       {request.userEmail}
                     </span>
                     {request.payerName && <span className="admin-user__meta">المحوِّل: {request.payerName}</span>}
+                    {request.note && <span className="admin-user__meta admin-order-note">ملاحظة: {request.note}</span>}
                   </td>
                   <td className="admin-num">
                     {request.amount} ر.س
@@ -254,6 +287,12 @@ export function AdminOrders({ requests, users, onChanged }: { requests: PaymentR
                   </td>
                   <td>
                     <div className="admin-order-actions">
+                      {request.receiptPath && (
+                        <button type="button" className="btn btn--ghost btn--sm" onClick={() => setViewing(request)}>
+                          <Icon name="receipt" size={14} />
+                          الإيصال
+                        </button>
+                      )}
                       {request.status !== 'approved' && (
                         <button type="button" className="btn btn--secondary btn--sm" onClick={() => setEditing(request)}>
                           تغيير الحالة
@@ -269,6 +308,7 @@ export function AdminOrders({ requests, users, onChanged }: { requests: PaymentR
       </div>
       {!shown.length && <p className="page-loading">{filter === 'open' && !query ? 'كل الطلبات رُوجعت.' : 'لا طلبات مطابقة.'}</p>}
 
+      {viewing && <ReceiptDialog request={viewing} onClose={() => setViewing(null)} />}
       {editing && <StatusDialog request={editing} customer={customerName(editing)} onClose={() => setEditing(null)} onSaved={onChanged} />}
     </section>
   );

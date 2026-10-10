@@ -329,7 +329,7 @@ create table if not exists public.payment_requests (
   method       text not null check (method in ('bank')),
   reference    text not null check (char_length(reference) <= 20),
   payer_name   text check (payer_name is null or char_length(payer_name) <= 80),
-  receipt_path text, -- older requests only: requests no longer carry a receipt
+  receipt_path text, -- the transfer receipt; null on requests from when it was optional
   status       text not null default 'pending',
   review_note  text check (review_note is null or char_length(review_note) <= 300),
   created_at   timestamptz not null default now(),
@@ -343,6 +343,10 @@ alter table public.payment_requests drop constraint if exists payment_requests_m
 -- NOT VALID: old requests (e.g. by STC Pay, since removed) stay as they are; new ones must be bank transfers.
 alter table public.payment_requests add constraint payment_requests_method_check check (method in ('bank')) not valid;
 alter table public.payment_requests alter column receipt_path drop not null;
+-- Anything the customer wants the admin to know about the transfer.
+alter table public.payment_requests add column if not exists note text;
+alter table public.payment_requests drop constraint if exists payment_requests_note_check;
+alter table public.payment_requests add constraint payment_requests_note_check check (note is null or char_length(note) <= 300);
 alter table public.payment_requests drop constraint if exists payment_requests_status_check;
 alter table public.payment_requests add constraint payment_requests_status_check
   check (status in ('pending', 'reviewing', 'approved', 'rejected'));
@@ -407,9 +411,12 @@ drop policy if exists "Cancel own pending requests" on public.payment_requests;
 drop function if exists public.approve_payment_request(uuid);
 drop function if exists public.reject_payment_request(uuid, text);
 
--- The admin moves a request between statuses. Approving gives (or extends)
--- the plan, from today or from the current end date if the plan is still
--- running; rejecting keeps a note the customer sees. An approved request is
+-- The admin moves a request between statuses. Approving a renewal (the same
+-- plan) adds the period to the end of the current one. Approving an upgrade
+-- starts the new plan today, for its period plus the days left on the old
+-- plan at their value in the new one (e.g. 100 days of جذور at 79/year are
+-- worth 53 days of راسخ at 149/year). Keep in sync with getUpgradeCreditDays
+-- in src/domain/plans.ts. Rejecting keeps a note the customer sees. An approved request is
 -- final (to take a plan back, change it from the users list).
 create or replace function public.set_payment_request_status(request_id uuid, new_status text, note text default null)
 returns void
@@ -419,7 +426,11 @@ set search_path = ''
 as $$
 declare
   request public.payment_requests;
+  current_plan text;
   current_end timestamptz;
+  period_length interval;
+  credit_days integer := 0;
+  new_end timestamptz;
 begin
   if not public.is_admin() then
     raise exception 'Only admins can review payments';
@@ -440,15 +451,22 @@ begin
   end if;
 
   if new_status = 'approved' then
-    select expires_at into current_end from public.subscriptions where user_id = request.user_id;
+    select sub.plan, sub.expires_at into current_plan, current_end from public.subscriptions sub where sub.user_id = request.user_id;
+    period_length := make_interval(months => case request.period when 'half' then 6 else 12 end);
+    if current_end > now() and current_plan <> request.plan then
+      -- Changing plans: the days left, converted at the customer's own prices.
+      credit_days := floor(
+        floor(extract(epoch from current_end - now()) / 86400)
+        * public.plan_price(current_plan, request.period, request.student_price, request.founder_price)
+        / public.plan_price(request.plan, request.period, request.student_price, request.founder_price)
+      );
+      new_end := now() + period_length + make_interval(days => credit_days);
+    else
+      new_end := greatest(coalesce(current_end, now()), now()) + period_length;
+    end if;
+
     insert into public.subscriptions (user_id, plan, expires_at, updated_at)
-    values (
-      request.user_id,
-      request.plan,
-      greatest(coalesce(current_end, now()), now())
-        + make_interval(months => case request.period when 'half' then 6 else 12 end),
-      now()
-    )
+    values (request.user_id, request.plan, new_end, now())
     on conflict (user_id) do update
       set plan = excluded.plan, expires_at = excluded.expires_at, updated_at = now();
 
@@ -461,7 +479,8 @@ begin
   -- Reopening a request fails on payment_requests_one_open_idx if the customer has sent another one since.
   update public.payment_requests
     set status = new_status,
-        review_note = case when new_status = 'rejected' then nullif(left(btrim(coalesce(note, '')), 300), '') end,
+        -- Qualified: payment_requests has a "note" column of its own (the customer's).
+        review_note = case when new_status = 'rejected' then nullif(left(btrim(coalesce(set_payment_request_status.note, '')), 300), '') end,
         reviewed_at = case when new_status in ('approved', 'rejected') then now() end,
         status_changed_at = now()
     where id = request_id;
@@ -710,9 +729,8 @@ grant execute on function public.reserve_ai_cards(integer, text) to authenticate
 grant execute on function public.settle_ai_cards(uuid, uuid, integer) to authenticated;
 
 -- ---------- Storage: payment receipts -------------------------------------------
--- No longer used: requests don't carry a receipt any more. The private bucket
--- stays for receipts sent earlier (admins can still read them, or delete them
--- in Supabase → Storage), and nobody can upload to it.
+-- Private. A customer uploads their transfer receipt under "<their user id>/...";
+-- admins can read all.
 
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values ('payment-receipts', 'payment-receipts', false, 5242880, array['image/png', 'image/jpeg', 'image/webp', 'application/pdf'])
@@ -722,6 +740,9 @@ on conflict (id) do update
       allowed_mime_types = excluded.allowed_mime_types;
 
 drop policy if exists "Payment receipts: own folder" on storage.objects;
+create policy "Payment receipts: own folder" on storage.objects for all to authenticated
+  using (bucket_id = 'payment-receipts' and (storage.foldername(name))[1] = (select auth.uid())::text)
+  with check (bucket_id = 'payment-receipts' and (storage.foldername(name))[1] = (select auth.uid())::text);
 
 drop policy if exists "Payment receipts: admins read" on storage.objects;
 create policy "Payment receipts: admins read" on storage.objects for select to authenticated
@@ -1075,3 +1096,51 @@ $$;
 -- Only the Edge Function (service role) may run it.
 revoke execute on function public.claim_due_reminders() from public, anon, authenticated;
 grant execute on function public.claim_due_reminders() to service_role;
+
+-- ---------- Feedback --------------------------------------------------------------
+-- Suggestions and complaints from the /feedback page. Saved here first, then
+-- emailed to support by the send-feedback Edge Function, so nothing is lost
+-- if the email fails. At most 5 a day per person.
+
+create table if not exists public.feedback (
+  id         uuid primary key default gen_random_uuid(),
+  user_id    uuid not null default auth.uid() references auth.users (id) on delete cascade,
+  kind       text not null check (kind in ('suggestion', 'complaint', 'problem', 'other')),
+  message    text not null check (char_length(btrim(message)) between 5 and 3000),
+  created_at timestamptz not null default now(),
+  emailed_at timestamptz
+);
+
+create index if not exists feedback_user_created_idx on public.feedback (user_id, created_at);
+
+create or replace function public.limit_feedback()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if (select count(*) from public.feedback f where f.user_id = new.user_id and f.created_at > now() - interval '1 day') >= 5 then
+    raise exception 'feedback_limit';
+  end if;
+  new.created_at := now();
+  new.emailed_at := null;
+  return new;
+end;
+$$;
+
+revoke execute on function public.limit_feedback() from public, anon, authenticated;
+
+drop trigger if exists feedback_limit on public.feedback;
+create trigger feedback_limit before insert on public.feedback
+  for each row execute function public.limit_feedback();
+
+alter table public.feedback enable row level security;
+
+drop policy if exists "Send own feedback" on public.feedback;
+create policy "Send own feedback" on public.feedback for insert to authenticated
+  with check ((select auth.uid()) = user_id);
+
+drop policy if exists "Read own feedback" on public.feedback;
+create policy "Read own feedback" on public.feedback for select to authenticated
+  using ((select auth.uid()) = user_id or (select public.is_admin()));

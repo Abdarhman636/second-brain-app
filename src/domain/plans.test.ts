@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   getDaysUntilExpiry,
   getEffectivePlan,
+  getUpgradeCreditDays,
   getPlanPrice,
+  comparePlans,
   describeLimits,
   isAtLimit,
   monthlyEquivalent,
@@ -66,5 +68,29 @@ describe('plans', () => {
     expect(getEffectivePlan('plus', '2026-10-07T00:00:00Z', now)).toBe('free');
     expect(getEffectivePlan('plus', null, now)).toBe('free');
     expect(getDaysUntilExpiry('2026-10-17T12:00:00Z', now)).toBe(10);
+  });
+});
+
+describe('comparePlans', () => {
+  it('tells the current plan from a higher or lower one', () => {
+    expect(comparePlans('plus', 'plus')).toBe('current');
+    expect(comparePlans('pro', 'plus')).toBe('upgrade');
+    expect(comparePlans('plus', 'free')).toBe('upgrade');
+    expect(comparePlans('plus', 'pro')).toBe('downgrade');
+  });
+});
+
+describe('getUpgradeCreditDays', () => {
+  const regular = { student: false, founder: false };
+
+  it('converts the days left at their value in the new plan', () => {
+    // 100 × 79 / 149 = 53.02
+    expect(getUpgradeCreditDays(100, 'plus', 'pro', 'year', regular)).toBe(53);
+    // Founder student: 100 × 35 / 69 = 50.7
+    expect(getUpgradeCreditDays(100, 'plus', 'pro', 'year', { student: true, founder: true })).toBe(50);
+  });
+
+  it('gives nothing when no days are left', () => {
+    expect(getUpgradeCreditDays(0, 'plus', 'pro', 'half', regular)).toBe(0);
   });
 });

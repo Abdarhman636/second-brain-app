@@ -81,8 +81,7 @@ export const PLANS: Record<PlanId, Plan> = {
     studentPrice: { half: 59, year: 99 },
     founderPrice: { half: 59, year: 99 },
     founderStudentPrice: { half: 39, year: 69 },
-    // Opens once AI card creation is built: until then there's nothing extra to pay for.
-    available: false,
+    available: true,
   },
 };
 
@@ -127,6 +126,12 @@ export function getDaysUntilExpiry(expiresAt: string, now: Date = new Date()): n
   return Math.max(0, Math.floor((new Date(expiresAt).getTime() - now.getTime()) / 86_400_000));
 }
 
+/** Where `planId` stands from an account on `currentPlan`: the same plan, a higher one, or a lower one. */
+export function comparePlans(planId: PlanId, currentPlan: PlanId): 'current' | 'upgrade' | 'downgrade' {
+  const rank = PLAN_ORDER.indexOf(planId) - PLAN_ORDER.indexOf(currentPlan);
+  return rank === 0 ? 'current' : rank > 0 ? 'upgrade' : 'downgrade';
+}
+
 /** Within this many days of expiry, the app suggests renewing. */
 export const RENEWAL_REMINDER_DAYS = 14;
 
@@ -161,6 +166,19 @@ export function getPriceList(plan: Plan, buyer: PriceFor): Record<BillingPeriod,
 /** What the buyer pays for a plan and period. */
 export function getPlanPrice(plan: Plan, period: BillingPeriod, buyer: PriceFor): number | null {
   return getPriceList(plan, buyer)?.[period] ?? null;
+}
+
+/**
+ * Changing plans while one is running: the new plan starts on approval, and
+ * the days left on the old one come along at their value in the new one, at
+ * the buyer's own prices. E.g. 100 days of جذور (79/year) → 53 days of راسخ
+ * (149/year). Keep in sync with set_payment_request_status in supabase/schema.sql.
+ */
+export function getUpgradeCreditDays(daysLeft: number, from: PaidPlanId, to: PaidPlanId, period: BillingPeriod, buyer: PriceFor): number {
+  const fromPrice = getPlanPrice(PLANS[from], period, buyer);
+  const toPrice = getPlanPrice(PLANS[to], period, buyer);
+  if (!fromPrice || !toPrice || daysLeft <= 0) return 0;
+  return Math.floor((daysLeft * fromPrice) / toPrice);
 }
 
 /** Whole-percent saving on the regular price for this buyer. */

@@ -1,6 +1,6 @@
 /*
  * Manual payments. A student transfers the price by bank transfer, sends a
- * request, and it waits until an admin reviews it:
+ * request with the receipt, and it waits until an admin reviews it:
  * pending → reviewing → approved / rejected. Approval (on the server) gives
  * the plan for 6 or 12 months.
  */
@@ -46,6 +46,10 @@ export interface PaymentRequest {
   reference: string;
   /** Name on the sending account, to help find the transfer. */
   payerName: string | null;
+  /** Anything the customer wants the admin to know. */
+  note: string | null;
+  /** Path of the uploaded receipt in the private "payment-receipts" bucket; null on some older requests. */
+  receiptPath: string | null;
   status: PaymentStatus;
   /** Why a request was rejected, shown to the student. */
   reviewNote: string | null;
@@ -89,3 +93,6 @@ export function isValidSaudiIban(iban: string): boolean {
 export function formatIban(iban: string): string {
   return iban.replace(/\s+/g, '').replace(/(.{4})/g, '$1 ').trim();
 }
+
+export const RECEIPT_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'application/pdf'];
+export const MAX_RECEIPT_BYTES = 5 * 1024 * 1024;

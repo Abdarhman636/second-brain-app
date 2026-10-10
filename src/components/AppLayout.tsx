@@ -162,12 +162,6 @@ function Sidebar({ section, id, onNavigate }: { section: Section | null; id: str
   const dueCount = useTodaysReviews(today).cards.length;
   const mode = useAppStore((state) => state.mode);
   const openDialog = useUiStore((state) => state.openDialog);
-  const navigate = useNavigate();
-
-  const signOut = async () => {
-    await endAccountSession();
-    navigate('/login');
-  };
 
   return (
     <aside className="sidebar" id={id} aria-label="القائمة الجانبية">
@@ -244,10 +238,10 @@ function Sidebar({ section, id, onNavigate }: { section: Section | null; id: str
             </Link>
           </li>
           <li>
-            <button type="button" className="sidebar__link sidebar__link--quiet" onClick={() => void signOut()}>
-              <Icon name="signOut" size={16} />
-              {mode === 'demo' ? 'الخروج من الوضع التجريبي' : 'تسجيل الخروج'}
-            </button>
+            <Link className="sidebar__link" to="/feedback" onClick={onNavigate}>
+              <Icon name="message" size={16} />
+              اقتراحات وشكاوى
+            </Link>
           </li>
         </ul>
         <p className="sidebar__copyright">رسوخ · {new Date().getFullYear()}</p>

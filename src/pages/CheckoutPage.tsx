@@ -17,9 +17,12 @@ import {
   submitPaymentRequest,
 } from '../data/payments';
 import { formatShortDate, toISODate } from '../domain/date-utils';
+import { formatCount } from '../domain/format';
 import { createPaymentReference, formatIban, getPaymentMethodLabel, isOpenPaymentStatus, type PaymentRequest } from '../domain/payments';
 import {
+  getDaysUntilExpiry,
   getPlanPrice,
+  getUpgradeCreditDays,
   isBillingPeriod,
   isPaidPlan,
   PERIOD_LABELS,
@@ -96,7 +99,9 @@ function TransferInstructions({ iban, amount, reference }: { iban: string; amoun
         <li>
           إن وجدت خانة <strong>«ملاحظة»</strong> أو «الغرض»، اكتب فيها رمز طلبك. وإن لم تجدها فلا بأس.
         </li>
-        <li>أكّد التحويل، ثم ارجع هنا وأرسل الطلب.</li>
+        <li>
+          أكّد التحويل، ثم <strong>خذ لقطة شاشة</strong> لصفحة نجاح التحويل (الإيصال)، وارفعها هنا مع طلبك.
+        </li>
       </ol>
 
       <div className="copy-fields">
@@ -156,7 +161,7 @@ function RequestStatus({ request, onRefresh }: { request: PaymentRequest; onRefr
       </dl>
 
       <ol className="checkout-next" aria-label="ماذا بعد؟">
-        <li className="is-done">أرسلت الطلب</li>
+        <li className="is-done">أرسلت الطلب والإيصال</li>
         <li className="is-current">{request.status === 'reviewing' ? 'نراجع التحويل الآن' : 'نراجع التحويل'}</li>
         <li>نفعّل اشتراكك، وتجده في «الإعدادات»</li>
       </ol>
@@ -192,10 +197,15 @@ export function CheckoutPage() {
 
   const requestedPlan = searchParams.get('plan');
   const requestedPeriod = searchParams.get('period');
-  const [planId, setPlanId] = useState<PaidPlanId>(isPaidPlan(requestedPlan) && PLANS[requestedPlan].available ? requestedPlan : 'plus');
+  // A راسخ subscriber renews راسخ: buying the lower plan would cut their plan short.
+  const [planId, setPlanId] = useState<PaidPlanId>(() =>
+    user?.plan === 'pro' ? 'pro' : isPaidPlan(requestedPlan) && PLANS[requestedPlan].available ? requestedPlan : 'plus',
+  );
   const [period, setPeriod] = useState<BillingPeriod>(isBillingPeriod(requestedPeriod) ? requestedPeriod : 'year');
   const [reference] = useState(() => createPaymentReference());
+  const [receipt, setReceipt] = useState<File | null>(null);
   const [payerName, setPayerName] = useState('');
+  const [note, setNote] = useState('');
   const [confirmed, setConfirmed] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -237,6 +247,9 @@ export function CheckoutPage() {
   const pending = requests?.find((request) => isOpenPaymentStatus(request.status));
   const lastReviewed = requests?.find((request) => !isOpenPaymentStatus(request.status));
   const hasActivePlan = user.plan !== 'free' && user.planExpiresAt;
+  const upgrading = hasActivePlan && isPaidPlan(user.plan) && planId !== user.plan;
+  const daysLeft = upgrading ? getDaysUntilExpiry(user.planExpiresAt!) : 0;
+  const creditDays = upgrading && isPaidPlan(user.plan) ? getUpgradeCreditDays(daysLeft, user.plan, planId, period, buyer) : 0;
 
   const refresh = async () => {
     await load();
@@ -247,11 +260,12 @@ export function CheckoutPage() {
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (!receipt) return setError('ارفع صورة الإيصال أولًا (لقطة شاشة لصفحة نجاح التحويل).');
     if (!confirmed) return setError(`أكّد أنك حوّلت ${amount} ر.س.`);
     setError('');
     setBusy(true);
     try {
-      const request = await submitPaymentRequest({ plan: planId, period, method: 'bank', reference, payerName });
+      const request = await submitPaymentRequest({ plan: planId, period, method: 'bank', reference, payerName, note, receipt });
       setRequests((current) => [request, ...(current ?? [])]);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (submitError) {
@@ -272,7 +286,15 @@ export function CheckoutPage() {
       <header className="page-header">
         <div>
           <p className="page-eyebrow">الاشتراك</p>
-          <h1 className="page-title">{pending ? 'طلبك قيد المراجعة' : `اشترك في ${plan.name}`}</h1>
+          <h1 className="page-title">
+            {pending
+              ? 'طلبك قيد المراجعة'
+              : upgrading
+                ? `الترقية إلى ${plan.name}`
+                : hasActivePlan
+                  ? `جدّد اشتراكك في ${plan.name}`
+                  : `اشترك في ${plan.name}`}
+          </h1>
         </div>
       </header>
 
@@ -284,8 +306,14 @@ export function CheckoutPage() {
             <div className="checkout-banner" role="status">
               <Icon name="check" size={18} />
               <p>
-                اشتراكك في <strong>{PLANS[user.plan].name}</strong> ساري حتى {formatDate(user.planExpiresAt!)}. إن جدّدت الآن، تُضاف المدة
-                الجديدة إلى نهاية اشتراكك الحالي.
+                اشتراكك في <strong>{PLANS[user.plan].name}</strong> ساري حتى {formatDate(user.planExpiresAt!)}.{' '}
+                {upgrading
+                  ? `بعد قبول طلبك تنتقل إلى ${plan.name} فورًا لمدة ${PERIOD_LABELS[period]}${
+                      creditDays > 0
+                        ? `، ويُضاف إليها ${formatCount(creditDays, 'days')} مقابل ما بقي لك في ${PLANS[user.plan].name} (${formatCount(daysLeft, 'days')}).`
+                        : '.'
+                    }`
+                  : 'إن جدّدت الآن، تُضاف المدة الجديدة إلى نهاية اشتراكك الحالي.'}
               </p>
             </div>
           )}
@@ -301,8 +329,7 @@ export function CheckoutPage() {
 
           <div className="pricing-payment checkout-payment">
             <p className="pricing__note">
-              الدفع حاليًا بتحويل بنكي، ونفعّل اشتراكك {PAYMENT.approvalTime} غالبًا.{' '}
-              {!PLANS.pro.available && 'خطة راسخ تُطلق مع ميزة البطاقات الذكية.'}
+              الدفع حاليًا بتحويل بنكي، ونفعّل اشتراكك {PAYMENT.approvalTime} غالبًا.
             </p>
             <p className="pricing-payment__soon">
               <span className="pricing-payment__tag">قريبًا</span>
@@ -358,7 +385,7 @@ export function CheckoutPage() {
                     </label>
                   ))}
                 </div>
-                {PLANS.pro.available && (
+                {PLANS.pro.available && user.plan !== 'pro' && (
                   <p className="checkout-hint">
                     الخطة:{' '}
                     {(['plus', 'pro'] as const).map((id) => (
@@ -374,7 +401,24 @@ export function CheckoutPage() {
                 <TransferInstructions iban={iban} amount={amount} reference={reference} />
               </Step>
 
-              <Step number={3} title="أرسل الطلب">
+              <Step number={3} title="ارفع الإيصال وأرسل الطلب">
+                <div className="field">
+                  <span className="field__label">صورة الإيصال</span>
+                  <label className={`receipt-picker${receipt ? ' has-file' : ''}`}>
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp,application/pdf"
+                      onChange={(event) => {
+                        setReceipt(event.target.files?.[0] ?? null);
+                        setError('');
+                      }}
+                    />
+                    <Icon name={receipt ? 'check' : 'upload'} size={20} />
+                    <span>{receipt ? receipt.name : 'اضغط لاختيار لقطة الشاشة من جوالك أو جهازك'}</span>
+                  </label>
+                  <p className="field__hint">صورة أو PDF، حتى 5 ميجابايت.</p>
+                </div>
+
                 <div className="field">
                   <label className="field__label" htmlFor="checkout-payer">
                     اسم صاحب الحساب الذي حوّلت منه <span className="field__optional">(اختياري)</span>
@@ -388,6 +432,21 @@ export function CheckoutPage() {
                     placeholder="يساعدنا في إيجاد تحويلك بسرعة"
                     value={payerName}
                     onChange={(event) => setPayerName(event.target.value)}
+                  />
+                </div>
+
+                <div className="field">
+                  <label className="field__label" htmlFor="checkout-note">
+                    ملاحظة <span className="field__optional">(اختياري)</span>
+                  </label>
+                  <textarea
+                    className="textarea"
+                    id="checkout-note"
+                    rows={2}
+                    maxLength={300}
+                    placeholder="أي شيء تريد أن نعرفه عن تحويلك"
+                    value={note}
+                    onChange={(event) => setNote(event.target.value)}
                   />
                 </div>
 

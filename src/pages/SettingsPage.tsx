@@ -1,12 +1,12 @@
 /*
  * Settings: account, plan, appearance, daily limit, daily reminder,
- * vacation mode, data export, shortcuts.
+ * vacation mode, data export, shortcuts, and signing out.
  * Each section is a row: what it is on one side, its controls on the other.
  */
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { Icon } from '../components/Icon';
-import { DEFAULT_REMINDER_HOUR, fetchReminderSettings, formatHour, ReminderError, saveReminderSettings, type ReminderSettings } from '../data/reminders';
+import { fetchReminderSettings, ReminderError, REMINDER_HOUR, saveReminderSettings } from '../data/reminders';
 import { requestEmailChange, signOut, updateDailyLimit, updateIsStudent, updateName } from '../data/session';
 import { formatLongDate, formatRelativeDate, formatShortDate, toISODate } from '../domain/date-utils';
 import { formatCount, getInitial } from '../domain/format';
@@ -41,7 +41,6 @@ function SettingsSection({ id, title, description, children }: { id: string; tit
 function AccountSection() {
   const user = useAppStore((state) => state.user);
   const mode = useAppStore((state) => state.mode);
-  const navigate = useNavigate();
   const showToast = useUiStore((state) => state.showToast);
   const [name, setName] = useState(user?.name ?? '');
   const [error, setError] = useState('');
@@ -132,7 +131,24 @@ function AccountSection() {
       </fieldset>
 
       <StudentDiscount />
+    </SettingsSection>
+  );
+}
 
+/** Last on the page: leaving the account (or the demo). */
+function SignOutSection() {
+  const mode = useAppStore((state) => state.mode);
+  const navigate = useNavigate();
+  return (
+    <SettingsSection
+      id="settings-signout"
+      title={mode === 'demo' ? 'الخروج من الوضع التجريبي' : 'تسجيل الخروج'}
+      description={
+        mode === 'demo'
+          ? 'ما أضفته في الوضع التجريبي لا يُحفظ.'
+          : 'تخرج من حسابك على هذا الجهاز. بطاقاتك ومراجعاتك محفوظة، وتجدها حين تدخل مرة أخرى.'
+      }
+    >
       <button
         type="button"
         className="btn btn--secondary settings-signout"
@@ -343,33 +359,28 @@ function VacationSection() {
 
 const limitLabel = (limit: DailyLimit) => (limit === null ? 'بلا حد' : String(limit));
 
-const REMINDER_HOURS = Array.from({ length: 24 }, (_, hour) => hour);
-
 function ReminderSection() {
   const mode = useAppStore((state) => state.mode);
   const showToast = useUiStore((state) => state.showToast);
-  const [settings, setSettings] = useState<ReminderSettings | null | undefined>(undefined);
+  const [enabled, setEnabled] = useState<boolean | undefined>(undefined);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     if (mode !== 'account') return;
     let active = true;
     fetchReminderSettings()
-      .then((loaded) => active && setSettings(loaded))
-      .catch(() => active && setSettings(null));
+      .then((loaded) => active && setEnabled(loaded?.enabled ?? false))
+      .catch(() => active && setEnabled(false));
     return () => {
       active = false;
     };
   }, [mode]);
 
-  const enabled = settings?.enabled ?? false;
-  const hour = settings?.hour ?? DEFAULT_REMINDER_HOUR;
-
-  const save = async (next: { enabled: boolean; hour: number }) => {
+  const save = async (next: boolean) => {
     setBusy(true);
     try {
-      setSettings(await saveReminderSettings(next));
-      showToast(next.enabled ? `سنذكّرك كل يوم الساعة ${formatHour(next.hour)} إن كان عندك ما تراجعه` : 'أوقفنا التذكير اليومي');
+      setEnabled((await saveReminderSettings({ enabled: next, hour: REMINDER_HOUR })).enabled);
+      showToast(next ? 'سنذكّرك كل يوم الساعة 8 مساءً إن كان عندك ما تراجعه' : 'أوقفنا التذكير اليومي');
     } catch (error) {
       showToast(error instanceof ReminderError ? error.message : 'تعذّر حفظ التذكير.', 'error');
     } finally {
@@ -381,42 +392,17 @@ function ReminderSection() {
     <SettingsSection
       id="settings-reminder"
       title="التذكير اليومي"
-      description="رسالة على بريدك في الساعة التي تختارها، إن كان عندك بطاقات تنتظر المراجعة ذلك اليوم. لا رسائل في أيام الإجازة."
+      description="رسالة على بريدك الساعة 8 مساءً بتوقيتك، إن كان عندك بطاقات لم تراجعها بعد. لا رسائل في أيام الإجازة."
     >
       {mode !== 'account' ? (
         <p className="settings-hint">متاح للحسابات فقط.</p>
-      ) : settings === undefined ? (
+      ) : enabled === undefined ? (
         <p className="settings-hint">جارٍ التحميل…</p>
       ) : (
-        <>
-          <label className="checkout-confirm reminder-toggle">
-            <input type="checkbox" checked={enabled} disabled={busy} onChange={(event) => void save({ enabled: event.target.checked, hour })} />
-            <span>ذكّرني بالمراجعة كل يوم</span>
-          </label>
-          <div className="field reminder-hour">
-            <label className="field__label" htmlFor="reminder-hour">
-              الساعة
-            </label>
-            <select
-              className="select"
-              id="reminder-hour"
-              value={hour}
-              disabled={busy || !enabled}
-              onChange={(event) => void save({ enabled, hour: Number(event.target.value) })}
-            >
-              {REMINDER_HOURS.map((option) => (
-                <option key={option} value={option}>
-                  {formatHour(option)}
-                </option>
-              ))}
-            </select>
-          </div>
-          {settings && (
-            <p className="settings-hint">
-              بتوقيت <span dir="ltr">{settings.timeZone}</span>. المقترح المساء: يذكّرك فقط إن لم تراجع بعد.
-            </p>
-          )}
-        </>
+        <label className="checkout-confirm reminder-toggle">
+          <input type="checkbox" checked={enabled} disabled={busy} onChange={(event) => void save(event.target.checked)} />
+          <span>ذكّرني بالمراجعة كل يوم الساعة 8 مساءً</span>
+        </label>
       )}
     </SettingsSection>
   );
@@ -556,6 +542,7 @@ export function SettingsPage() {
         <VacationSection />
         <DataSection />
         <ShortcutsSection />
+        <SignOutSection />
       </div>
     </div>
   );

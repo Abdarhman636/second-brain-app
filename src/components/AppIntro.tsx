@@ -36,7 +36,7 @@ export function AppIntro({ headingLevel = 2 }: { headingLevel?: 1 | 2 }) {
       </span>
 
       <Heading className="auth-intro__title" id="auth-intro-title">
-        معرفةٌ تترسّخ معك
+        رسّخ معلوماتك
       </Heading>
       <p className="auth-intro__lead">
         نتعلم كل يوم، ثم ننسى أكثره خلال أيام. في رسوخ تدوّن ما تتعلمه في بطاقات قصيرة وتنظّمه، ثم نعيده إليك في الوقت المناسب، قبل أن

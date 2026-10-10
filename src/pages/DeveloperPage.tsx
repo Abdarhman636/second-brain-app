@@ -14,7 +14,7 @@ export function DeveloperPage() {
       <header className="page-header">
         <div>
           <p className="page-eyebrow">مبرمج تطبيق رسوخ</p>
-          <h1 className="page-title">من صنع رسوخ؟</h1>
+          <h1 className="page-title">من خلف تطبيق رسوخ؟</h1>
         </div>
       </header>
 

@@ -14,6 +14,7 @@ import { ForgotPasswordPage, ResetPasswordPage } from './pages/PasswordPages';
 import { AdminDashboardPage } from './pages/AdminDashboardPage';
 import { CheckoutPage } from './pages/CheckoutPage';
 import { DeveloperPage } from './pages/DeveloperPage';
+import { FeedbackPage } from './pages/FeedbackPage';
 import { GuidePage } from './pages/GuidePage';
 import { MobileAppPage } from './pages/MobileAppPage';
 import { OrdersPage } from './pages/OrdersPage';
@@ -86,6 +87,7 @@ export function App() {
           <Route path="settings" element={<SettingsPage />} />
           <Route path="checkout" element={<CheckoutPage />} />
           <Route path="orders" element={<OrdersPage />} />
+          <Route path="feedback" element={<FeedbackPage />} />
           {/* Admin only, at an address that's hard to guess, and linked from nowhere in the app. */}
           <Route path={ADMIN_PATH.slice(1)} element={<AdminOnly><AdminDashboardPage /></AdminOnly>} />
           <Route path="*" element={<Navigate to="/" replace />} />

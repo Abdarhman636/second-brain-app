@@ -311,9 +311,14 @@
   }
 }
 
-/* ---------- Daily reminder ---------- */
+/* ---------- Suggestions and complaints (/feedback) ---------- */
 
-.reminder-hour {
-  max-width: 12rem;
-  margin-top: var(--space-3);
+.feedback__kinds {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(8rem, 1fr));
+  gap: var(--space-2);
+}
+
+.feedback__sent {
+  max-width: 40rem;
 }

@@ -5,3 +5,6 @@ dist/
 
 # Supabase CLI local state
 supabase/.temp/
+
+# Upload package for the hosting (made from dist/)
+*.zip

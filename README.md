@@ -112,7 +112,7 @@ The UI fonts (IBM Plex Sans Arabic, plus Noto Naskh Arabic for quotes) come from
   |---|---|---|---|---|
   | **بذرة** (free) | 0 | 0 | 0 | 1 shelf, 2 projects, 20 cards, with every review feature |
   | **جذور** | 49 SAR | 79 SAR | 29 / 49 SAR | Up to 7 shelves, 30 projects and 600 cards |
-  | **راسخ** | 99 SAR | 149 SAR | 59 / 99 SAR | Everything in جذور with no limits on shelves, projects or cards, plus AI-made cards from text or a photo (up to 300 a month). Shown as "قريبًا" until the AI feature is built (`available: false` in `src/domain/plans.ts`) |
+  | **راسخ** | 99 SAR | 149 SAR | 59 / 99 SAR | Everything in جذور with no limits on shelves, projects or cards, plus AI-made cards from text or a photo (up to 300 a month). |
 
   - **Founders' price**: the first 30 subscribers pay the launch prices and keep them on every renewal.
     - Launch prices: جذور 29 / 49, or 19 / 35 for students. راسخ 59 / 99, or 39 / 69 for students.
@@ -135,10 +135,12 @@ The UI fonts (IBM Plex Sans Arabic, plus Noto Naskh Arabic for quotes) come from
 - **Manual payment by bank transfer** (`/checkout`), in three steps:
   1. Choose 6 or 12 months.
   2. Transfer the exact amount to the IBAN, following step-by-step instructions with copy buttons.
-  3. Confirm the transfer (with the sender's name, optionally) and send the request. No receipt is needed.
+  3. Upload a screenshot of the receipt (or a PDF; required), add the sender's name and a note if they like (both optional), confirm the transfer, and send.
   - Each request gets a short reference (e.g. `RS-7KQ2M`) to put in the transfer note.
   - Requests can't be cancelled. The admin rejects one that never got paid, and the student sees the reason.
-  - Sending a request emails the student its details and the admin a heads-up (see **Payment emails**).
+  - Sending a request emails the student its details and the admin a heads-up with the receipt attached (see **Payment emails**).
+  - **Renewing and upgrading** use the same page. A subscriber renewing gets the new period added to the end of their plan. One upgrading (جذور → راسخ) moves to راسخ as soon as the request is approved, for its period plus the days left on جذور converted at their value in راسخ, at the customer's own prices (e.g. 100 days at 79/year → 53 days at 149/year). The checkout page shows the conversion before they pay. The rule is `getUpgradeCreditDays` in `src/domain/plans.ts`, applied on approval by `set_payment_request_status`. A راسخ subscriber can't buy جذور.
+- **The pricing page for subscribers**: their own plan is framed and marked «باقتك الحالية», with «أنت مشترك حاليًا في هذه الباقة حتى …» and a renew button. A higher plan offers «الترقية إلى …», and a lower one is disabled.
 - **Orders** (`/orders`, «الطلبات» in the sidebar, accounts only): every subscription request the customer sent, with its plan, amount, reference and price notes.
   - A timeline shows where each one stands: sent → waiting or being reviewed → activated or rejected (with the reason), with the date and time of each step.
 - **Request statuses**: `pending` (بانتظار المراجعة) → `reviewing` (قيد المراجعة) → `approved` (مقبول) or `rejected` (مرفوض).
@@ -165,8 +167,8 @@ The UI fonts (IBM Plex Sans Arabic, plus Noto Naskh Arabic for quotes) come from
   - Visitors without an account sign up first and are brought back to the link afterwards, even after confirming their email in another tab.
   - The owner sees how many people copied it (once per person).
   - Rules in `src/domain/sharing.ts`. Tables `shares` and `share_copies`, with `get_share` (open to everyone) and `record_share_copy` in `supabase/schema.sql`. An admin can remove a share by deleting its row (Table Editor → shares).
-- **Daily reminder email**: «عندك 12 بطاقة تراجعها اليوم», at the hour the user picks (8 pm by default), in their time zone.
-  - It's on for every account once the app has saved its time zone, and turned off in **Settings → التذكير اليومي** or with the email's «إيقاف التذكير» link (`/unsubscribe`, no sign-in needed).
+- **Daily reminder email**: «عندك 12 بطاقة تراجعها اليوم», at 8 pm in each user's own time zone (`REMINDER_HOUR` in `src/data/reminders.ts`).
+  - It's on for every account once the app has saved its time zone. Settings has a single on/off switch (**التذكير اليومي**), and the email's «إيقاف التذكير» link turns it off (`/unsubscribe`, no sign-in needed).
   - It's only sent when cards are waiting, counted like the اليوم page: due cards in active projects, within what's left of the daily limit. Nothing is sent during a vacation or before the email is confirmed, and at most one a day.
   - **How it works:** the `daily-reminders` Edge Function runs every hour. It calls `claim_due_reminders`, which picks the users whose hour has come (or passed within 2 hours, if a run was missed) and marks them, then emails each one. Calling it again sends nothing new.
   - **Setup:**
@@ -186,7 +188,7 @@ The UI fonts (IBM Plex Sans Arabic, plus Noto Naskh Arabic for quotes) come from
 - **Admin dashboard** (`/admrusskh`, set as `ADMIN_PATH` in `src/config.ts`): the app's numbers, the orders, and every user with what matters about them.
   - **Numbers:** users, active reviewers, subscribers, revenue, pending payments, cards, reviews, AI usage, signups per day, and how users split across plans.
   - **Orders** (`/admrusskh#orders`): every request with its reference, plan, customer name and email, payer name, amount and price notes, when it was sent and how long ago, and its status.
-    - Filter by status (open requests first, oldest first), and search by reference, name or email.
+    - Filter by status (open requests first, oldest first), search by reference, name or email, open the receipt, and read the customer's note.
     - Requests waiting more than a day are marked red.
     - **تغيير الحالة** moves a request to another status. Approving gives the plan for its period, added to the end of a plan that's still running. Rejecting asks for a reason, which the customer sees.
     - It emails the customer the new status, unless you untick the box.
@@ -196,7 +198,7 @@ The UI fonts (IBM Plex Sans Arabic, plus Noto Naskh Arabic for quotes) come from
   - **Access:** the dashboard is linked from nowhere in the app, and its address isn't the usual `/admin`; open it by its address. Anyone who isn't an admin is sent to the home page.
   - **Where the protection is:** the data comes from database functions that refuse non-admins (`admin_dashboard_stats`, `admin_list_users`, `admin_set_plan`). That's what keeps it private, since the browser guard alone can be bypassed.
 - **Payment emails**: the `payment-emails` Supabase Edge Function (`supabase/functions/payment-emails/`) sends them over SMTP. The connection and the email layout live in `supabase/functions/_shared/mail.ts`, shared with `daily-reminders`. With Gmail, they come from your own address.
-  - **New request:** the student gets the request's details and status, and the admin a heads-up. Only the request's owner can trigger it, and only once per request.
+  - **New request:** the student gets the request's details and status, and the admin a heads-up with the customer's note and the receipt attached. Only the request's owner can trigger it, and only once per request.
   - **Status change:** the customer gets the new status, the rejection reason, or the plan's end date. Only admins can trigger it.
   - The function builds each email from the database row, never from what the browser sends, so it can't be used to send anything else.
   - A failed email never undoes the request or the status change; the admin sees a warning.
@@ -212,12 +214,14 @@ The UI fonts (IBM Plex Sans Arabic, plus Noto Naskh Arabic for quotes) come from
   - Gmail allows about 500 emails a day. To send from your own domain later, set `SMTP_HOST`, `SMTP_PORT` (465) and `MAIL_FROM` for a provider such as Resend or Zoho.
 - **Where plans live**: the `subscriptions` table (`plan`, `expires_at`). No row, or an expired one, means the free plan. Users can read their own row, but only admins can write. Prices, including the student price, are set by the database (`plan_price`), not by the app. Keep them in sync with `src/domain/plans.ts`.
 - **Settings** (`/settings`):
-  - **Account**: change your name (saved to your account), see your email, and sign out.
-  - **Appearance**: light or dark.
+  - **Account**: change your name (saved to your account) and see your email.
+  - **Plan**, **Appearance** (light or dark).
   - **Daily review limit**: 20, 30 (the default), 50, 100, or no limit. It's saved on the account.
+  - **Daily reminder**: on or off.
   - **Vacation mode**: start or end it.
   - **Your data**: export everything as a JSON file.
   - **Keyboard shortcuts**: the full list.
+  - **Sign out**, last on the page (it's not in the sidebar).
 - **Themes**: light by default, dark on request. The choice is saved on the device and applied before the first paint, so there's no flash.
 - **Footer links** (at the bottom of the sidebar, or under the About page when signed out; the sign-in pages have none):
   - **طريقة استخدام رسوخ** (`/guide`, open to everyone): a step-by-step guide to the whole app, with contents.
@@ -225,6 +229,10 @@ The UI fonts (IBM Plex Sans Arabic, plus Noto Naskh Arabic for quotes) come from
     - The old `/about` address redirects here.
   - **مبرمج تطبيق رسوخ** (`/developer`): who made Rusookh, links to LinkedIn and Instagram, and «ادعيلي دعوة حلوة».
     - The details live in `DEVELOPER` in `src/config.ts`.
+  - **اقتراحات وشكاوى** (`/feedback`, accounts only): pick suggestion, complaint, technical problem or other, and write a message.
+    - The `send-feedback` Edge Function saves it in the `feedback` table, then emails it to `SUPPORT_EMAIL` (default `support@rsookh.com`). The user's address is the Reply-To, so replying to the email answers them.
+    - At most 5 messages a day per person (enforced by the database). If the email fails, the message is still in the table (Table Editor → feedback).
+    - Deploy: `npx supabase functions deploy send-feedback --project-ref <ref>`, after running `supabase/schema.sql`.
   - Paid accounts see their plan in the sidebar, with its end date, and a plan tag next to their name.
 
 ## Review schedule

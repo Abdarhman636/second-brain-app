@@ -5,7 +5,7 @@
 /** Who made Rusookh: shown on the "مبرمج تطبيق رسوخ" page (/developer). */
 export const DEVELOPER = {
   name: 'عبدالرحمن السيد',
-  role: 'مصمم ومبرمج واجهات',
+  role: 'مصمم ومبرمج واجهات محترف',
   linkedin: 'https://www.linkedin.com/in/abdulrhman-me/',
   instagram: 'https://www.instagram.com/abdulrhman.me/',
 } as const;

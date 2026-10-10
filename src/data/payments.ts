@@ -1,20 +1,27 @@
 /*
- * Manual payments on Supabase: payment requests, the user's subscription, and the admin's review (set_payment_request_status,
+ * Manual payments on Supabase: payment requests with an uploaded receipt,
+ * the user's subscription, and the admin's review (set_payment_request_status,
  * a database function that checks the caller is an admin). Emails about a
  * request go through the payment-emails Edge Function.
  *
  * See supabase/schema.sql for the tables, policies and functions.
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { PaymentMethod, PaymentRequest, PaymentStatus } from '../domain/payments';
+import { MAX_RECEIPT_BYTES, RECEIPT_TYPES, type PaymentMethod, type PaymentRequest, type PaymentStatus } from '../domain/payments';
 import { getEffectivePlan, isBillingPeriod, isPaidPlan, type BillingPeriod, type PaidPlanId, type PlanId } from '../domain/plans';
+import { ImageFileError, prepareImageFile } from '../lib/image-file';
 import { useAppStore } from '../store/app-store';
 import { supabase } from './supabase/client';
+
+const RECEIPT_BUCKET = 'payment-receipts';
+const RECEIPT_URL_TTL_SECONDS = 60 * 60;
 
 export class PaymentError extends Error {}
 
 const MESSAGES = {
   unavailable: 'الدفع متاح للحسابات فقط. أنشئ حسابًا مجانيًا أولًا.',
+  receiptType: 'ارفع صورة الإيصال (لقطة شاشة) أو ملف PDF.',
+  receiptSize: 'ملف الإيصال كبير. الحد الأقصى 5 ميجابايت.',
   alreadyPending: 'لديك طلب قيد المراجعة بالفعل. تابعه من صفحة «الطلبات».',
   failed: 'تعذّر إرسال الطلب. تأكد من اتصالك وحاول مرة أخرى.',
 };
@@ -38,6 +45,8 @@ interface PaymentRequestRow {
   method: PaymentMethod;
   reference: string;
   payer_name: string | null;
+  note: string | null;
+  receipt_path: string | null;
   status: PaymentStatus;
   review_note: string | null;
   created_at: string;
@@ -57,6 +66,8 @@ const toPaymentRequest = (row: PaymentRequestRow): PaymentRequest => ({
   method: row.method,
   reference: row.reference,
   payerName: row.payer_name,
+  note: row.note ?? null,
+  receiptPath: row.receipt_path,
   status: row.status,
   reviewNote: row.review_note,
   createdAt: row.created_at,
@@ -157,19 +168,48 @@ export async function listMyPaymentRequests(): Promise<PaymentRequest[]> {
   return (data as PaymentRequestRow[]).map(toPaymentRequest);
 }
 
+/** Images are re-encoded and scaled down (smaller, and safe to show); PDFs are kept as they are. */
+async function prepareReceipt(file: File): Promise<Blob> {
+  if (!RECEIPT_TYPES.includes(file.type) && !file.type.startsWith('image/')) throw new PaymentError(MESSAGES.receiptType);
+  if (file.type === 'application/pdf') {
+    if (file.size > MAX_RECEIPT_BYTES) throw new PaymentError(MESSAGES.receiptSize);
+    return file;
+  }
+  try {
+    const dataUrl = await prepareImageFile(file);
+    const blob = await (await fetch(dataUrl)).blob();
+    if (blob.size > MAX_RECEIPT_BYTES) throw new PaymentError(MESSAGES.receiptSize);
+    return blob;
+  } catch (error) {
+    if (error instanceof PaymentError) throw error;
+    if (error instanceof ImageFileError) throw new PaymentError(error.message);
+    throw new PaymentError(MESSAGES.receiptType);
+  }
+}
+
+const EXTENSIONS: Record<string, string> = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'application/pdf': 'pdf' };
+
 export async function submitPaymentRequest(input: {
   plan: PaidPlanId;
   period: BillingPeriod;
   method: PaymentMethod;
   reference: string;
   payerName: string;
+  note: string;
+  receipt: File;
 }): Promise<PaymentRequest> {
   const client = requireClient();
   const user = useAppStore.getState().user;
   if (!user || useAppStore.getState().mode !== 'account') throw new PaymentError(MESSAGES.unavailable);
   if (!isPaidPlan(input.plan) || !isBillingPeriod(input.period)) throw new PaymentError(MESSAGES.failed);
 
+  const receipt = await prepareReceipt(input.receipt);
   const id = crypto.randomUUID();
+  const path = `${user.id}/${id}.${EXTENSIONS[receipt.type] ?? 'jpg'}`;
+
+  const upload = await client.storage.from(RECEIPT_BUCKET).upload(path, receipt, { contentType: receipt.type });
+  if (upload.error) throw new PaymentError(MESSAGES.failed);
+
   const { data, error } = await client
     .from('payment_requests')
     .insert({
@@ -180,11 +220,14 @@ export async function submitPaymentRequest(input: {
       method: input.method,
       reference: input.reference,
       payer_name: input.payerName.trim() || null,
+      note: input.note.trim() || null,
+      receipt_path: path,
     })
     .select()
     .single();
 
   if (error) {
+    await client.storage.from(RECEIPT_BUCKET).remove([path]);
     // 23505: unique violation, i.e. a request is already waiting.
     throw new PaymentError(error.code === '23505' ? MESSAGES.alreadyPending : MESSAGES.failed);
   }
@@ -200,6 +243,11 @@ export async function listAllPaymentRequests(): Promise<PaymentRequest[]> {
   const { data, error } = await requireClient().from('payment_requests').select('*').order('created_at', { ascending: false }).limit(300);
   if (error) throw new PaymentError('تعذّر تحميل الطلبات.');
   return (data as PaymentRequestRow[]).map(toPaymentRequest);
+}
+
+export async function getReceiptUrl(path: string): Promise<string | null> {
+  const { data } = await requireClient().storage.from(RECEIPT_BUCKET).createSignedUrl(path, RECEIPT_URL_TTL_SECONDS);
+  return data?.signedUrl ?? null;
 }
 
 /**
